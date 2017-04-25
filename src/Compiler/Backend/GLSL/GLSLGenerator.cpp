@@ -1805,7 +1805,26 @@ void GLSLGenerator::WriteObjectExprIdent(const ObjectExpr& objectExpr, bool writ
             Write(symbol->ident);
     }
     else
-        Write(objectExpr.ident);
+    {
+        std::string ident = objectExpr.ident;
+
+        /* If accessing a matrix subscript, flip row and column indices */
+        if(auto prefixExpr = objectExpr.prefixExpr)
+        {
+            if(auto typeDenoter = prefixExpr->GetTypeDenoter())
+            {
+                if(auto baseTypeDenoter = typeDenoter->As<BaseTypeDenoter>())
+                {
+                    if(IsMatrixType(baseTypeDenoter->dataType))
+                    {
+                        ident = FlipMatrixSubscript(ident);
+                    }
+                }
+            }
+        }
+
+        Write(ident);
+    }
 }
 
 /*
