@@ -287,6 +287,9 @@ DataType VectorDataType(const DataType baseDataType, int vectorSize);
 // Returns the matrix data type for the specified type, rows, and columns.
 DataType MatrixDataType(const DataType baseDataType, int rows, int columns);
 
+// Flips rows and columns on the provided matrix subscript and returns the flipped subscript
+std::string FlipMatrixSubscript(const std::string& s);
+
 // Returns the data type for the specified swizzle operator or throws and std::invalid_argument on failure.
 DataType SubscriptDataType(const DataType dataType, const std::string& subscript);
 

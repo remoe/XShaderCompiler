@@ -11,6 +11,7 @@
 #include "ReportIdents.h"
 #include <map>
 #include <algorithm>
+#include <sstream>
 
 
 namespace Xsc
@@ -615,48 +616,68 @@ static DataType SubscriptDataTypeVector(const DataType dataType, const std::stri
 Matrix subscription rules for HLSL:
 see https://msdn.microsoft.com/en-us/library/windows/desktop/bb509634(v=vs.85).aspx#Matrix
 */
+static std::pair<int, int> ParseNextMatrixSubscript(const std::string& s, std::size_t& i)
+{
+    /* Parse all matrix row-column subscriptions (e.g. zero-based "_m00", or one-based "_11") */
+    if (i + 3 > s.size())
+        InvalidArg(R_IncompleteMatrixSubscript(s));
+    if (s[i] != '_')
+        InvalidArg(R_InvalidCharInMatrixSubscript(std::string(1, s[i]), s));
+    ++i;
+
+    char zeroBase = 1;
+    if (s[i] == 'm')
+    {
+        ++i;
+        zeroBase = 0;
+        if (i + 2 > s.size())
+            InvalidArg(R_IncompleteMatrixSubscript(s));
+    }
+
+    for (int j = 0; j < 2; ++j)
+    {
+        if (s[i] < '0' + zeroBase || s[i] > '3' + zeroBase)
+        {
+            InvalidArg(
+                R_InvalidCharInMatrixSubscript(
+                    std::string(1, s[i]), s, (zeroBase == 0 ? "zero" : "one")
+                )
+            );
+        }
+
+        ++i;
+    }
+
+    std::pair<int, int> output;
+    output.first = s[i - 2] - '0' - zeroBase;
+    output.second = s[i - 1] - '0' - zeroBase;
+
+    return output;
+}
+
+std::string FlipMatrixSubscript(const std::string& s)
+{
+    std::stringstream out;
+
+    for (std::size_t i = 0; i < s.size();)
+    {
+        auto indices = ParseNextMatrixSubscript(s, i);
+        out << "_m" << std::to_string(indices.second) << std::to_string(indices.first);
+    }
+
+    return out.str();
+}
+
 static DataType SubscriptDataTypeMatrix(const DataType dataType, const std::string& subscript, int rows, int cols)
 {
     /* Validate matrix subscript */
     if (rows < 1 || rows > 4 || cols < 1 || cols > 4)
         InvalidArg(R_InvalidMatrixDimension(rows, cols));
 
-    /* Parse all matrix row-column subscriptions (e.g. zero-based "_m00", or one-based "_11") */
-    auto ParseNextSubscript = [](const std::string& s, std::size_t& i)
-    {
-        if (i + 3 > s.size())
-            InvalidArg(R_IncompleteMatrixSubscript(s));
-        if (s[i] != '_')
-            InvalidArg(R_InvalidCharInMatrixSubscript(std::string(1, s[i]), s));
-        ++i;
-
-        char zeroBase = 1;
-        if (s[i] == 'm')
-        {
-            ++i;
-            zeroBase = 0;
-            if (i + 2 > s.size())
-                InvalidArg(R_IncompleteMatrixSubscript(s));
-        }
-        
-        for (int j = 0; j < 2; ++j)
-        {
-            if (s[i] < '0' + zeroBase || s[i] > '3' + zeroBase)
-            {
-                InvalidArg(
-                    R_InvalidCharInMatrixSubscript(
-                        std::string(1, s[i]), s, (zeroBase == 0 ? "zero" : "one")
-                    )
-                );
-            }
-            ++i;
-        }
-    };
-
     int vectorSize = 0;
 
     for (std::size_t i = 0; i < subscript.size(); ++vectorSize)
-        ParseNextSubscript(subscript, i);
+        ParseNextMatrixSubscript(subscript, i);
 
     return VectorDataType(BaseDataType(dataType), vectorSize);
 }
