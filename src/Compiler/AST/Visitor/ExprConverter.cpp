@@ -143,6 +143,9 @@ void ExprConverter::ConvertExpr(ExprPtr& expr, const Flags& flags)
         if (enabled(ConvertMatrixArrayAccess))
             ConvertExprMatrixArrayAccess(expr);
 
+        if (enabled(ConvertMatrixInitializers))
+            ConvertExprMatrixInitializer(expr);
+
         if (enabled(ConvertVectorSubscripts))
             ConvertExprVectorSubscript(expr);
 
@@ -488,6 +491,45 @@ void ExprConverter::ConvertExprMatrixArrayAccessArray(ExprPtr& expr, ArrayExpr* 
     }
 }
 
+void ExprConverter::ConvertExprMatrixInitializer(ExprPtr& expr)
+{
+    /* Is this a matrix constructor or initializer */
+    if (auto callExpr = expr->As<CallExpr>())
+    {
+        if(auto typeDenoter = callExpr->typeDenoter)
+        {
+            if(auto baseTypeDenoter = typeDenoter->As<BaseTypeDenoter>())
+            {
+                if (IsMatrixType(baseTypeDenoter->dataType))
+                {
+                    DataType matrixType = baseTypeDenoter->dataType;
+
+                    auto matrixDim = MatrixTypeDim(matrixType);
+                    int numRows = matrixDim.first;
+                    int numCols = matrixDim.second;
+
+                    if (callExpr->arguments.size() == (numRows * numCols))
+                    {
+                        std::vector<ExprPtr> reorderedArgs;
+                        for (int i = 0; i < numRows; i++)
+                            for (int j = 0; j < numCols; j++)
+                                reorderedArgs.push_back(callExpr->arguments[j * numRows + i]);
+
+                        callExpr->arguments = reorderedArgs;
+                    }
+                    else if (callExpr->arguments.size() == numRows)
+                    {
+                        auto matrixTypeDenoter = std::make_shared<BaseTypeDenoter>();
+                        matrixTypeDenoter->dataType = matrixType;
+
+                        expr = ASTFactory::MakeIntrinsicCallExpr(Intrinsic::Matrix_Construct, "xsc_matConstruct", matrixTypeDenoter, callExpr->arguments);
+                    }
+                }
+            }
+        }
+    }
+}
+
 void ExprConverter::ConvertExprIntrinsicCallLog10(ExprPtr& expr)
 {
     /* Is this a call expression to the "log10" intrinisc? */
@@ -545,6 +587,9 @@ void ExprConverter::ConvertExprTargetTypeInitializer(ExprPtr& expr, InitializerE
 
     /* Convert initializer expression into type constructor */
     expr = ASTFactory::MakeTypeCtorCallExpr(targetTypeDen.Copy(), initExpr->exprs);
+
+    if (conversionFlags_(ConvertMatrixInitializers))
+        ConvertExprMatrixInitializer(expr);
 }
 
 /* ------- Visit functions ------- */

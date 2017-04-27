@@ -852,8 +852,9 @@ enum class Intrinsic
     Image_AtomicCompSwap,       // GLSL only
     Image_AtomicExchange,       // GLSL only
 
-    Matrix_ReadRow,             // GLSL only
-    Matrix_WriteRow             // GLSL only
+    Matrix_ReadRow,             // GLSL only (Generated intrinsic)
+    Matrix_WriteRow,            // GLSL only (Generated intrinsic)
+    Matrix_Construct            // GLSL only (Generated intrinsic)
 };
 
 // Container structure for all kinds of intrinsic call usages (can be used as std::map<Intrinsic, IntrinsicUsage>

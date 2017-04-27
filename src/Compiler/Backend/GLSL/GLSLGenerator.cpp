@@ -146,7 +146,8 @@ bool GLSLGenerator::IsWrappedIntrinsic(const Intrinsic intrinsic) const
         Intrinsic::Lit,
         Intrinsic::SinCos,
         Intrinsic::Matrix_ReadRow,
-        Intrinsic::Matrix_WriteRow
+        Intrinsic::Matrix_WriteRow,
+        Intrinsic::Matrix_Construct
     };
     return (wrappedIntrinsics.find(intrinsic) != wrappedIntrinsics.end());
 }
@@ -2503,6 +2504,8 @@ void GLSLGenerator::WriteWrapperIntrinsics()
         WriteWrapperIntrinsicsMatrixWriteRow(*usage);
     if (auto usage = program->FetchIntrinsicUsage(Intrinsic::Matrix_ReadRow))
         WriteWrapperIntrinsicsMatrixReadRow(*usage);
+    if (auto usage = program->FetchIntrinsicUsage(Intrinsic::Matrix_Construct))
+        WriteWrapperIntrinsicsMatrixConstruct(*usage);
 }
 
 void GLSLGenerator::WriteWrapperIntrinsicsClip(const IntrinsicUsage& usage)
@@ -2706,6 +2709,70 @@ void GLSLGenerator::WriteWrapperIntrinsicsMatrixReadRow(const IntrinsicUsage& us
                             Write(", ");
 
                         Write("m[" + std::to_string(i) + "][i]");
+                    }
+
+                    Write(");");
+                }
+                WriteScopeClose();
+            }
+            EndLn();
+
+            wrappersWritten = true;
+        }
+    }
+
+    if (wrappersWritten)
+        Blank();
+}
+
+void GLSLGenerator::WriteWrapperIntrinsicsMatrixConstruct(const IntrinsicUsage& usage)
+{
+    bool wrappersWritten = false;
+
+    for (const auto& argList : usage.argLists)
+    {
+        int numRows = (int)argList.argTypes.size();
+        if (numRows >= 2 && numRows <= 4)
+        {
+            auto vectorDim = MatrixTypeDim(argList.argTypes[0]);
+            int numCols = vectorDim.first;
+
+            DataType baseType = BaseDataType(argList.argTypes[0]);
+            DataType matrixType = MatrixDataType(baseType, numRows, numCols);
+            
+            DataType rowType = VectorDataType(baseType, numCols);
+
+            BeginLn();
+            {
+                /* Write function signature */
+                WriteDataType(matrixType, IsESSL());
+                Write(" xsc_matConstruct(");
+                for(int i = 0; i < numRows; i++)
+                {
+                    if (i != 0)
+                        Write(", ");
+
+                    WriteDataType(rowType, IsESSL());
+                    Write(" v" + std::to_string(i));
+                }
+                Write(")");
+
+                /* Write function body */
+                WriteScopeOpen(compactWrappers_);
+                {
+                    Write("return ");
+                    WriteDataType(matrixType, IsESSL());
+                    Write("(");
+
+                    for (int i = 0; i < numCols; i++)
+                    {
+                        for(int j = 0; j < numRows; j++)
+                        {
+                            if (i != 0 || j != 0)
+                                Write(", ");
+
+                            Write("v" + std::to_string(j) + "[" + std::to_string(i) + "]");
+                        }
                     }
 
                     Write(");");
