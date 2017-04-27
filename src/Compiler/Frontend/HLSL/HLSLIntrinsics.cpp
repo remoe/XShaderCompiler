@@ -586,6 +586,9 @@ static std::map<Intrinsic, IntrinsicSignature> GenerateIntrinsicSignatureMap()
         { T::Image_AtomicMin,                  {                   2, 3 } },
         { T::Image_AtomicOr,                   {                   2, 3 } },
         { T::Image_AtomicXor,                  {                   2, 3 } },
+
+        { T::Matrix_ReadRow,                   { Ret::Float4,      2    } },
+        { T::Matrix_WriteRow,                  { Ret::Float4,      3    } },
     };
 }
 
