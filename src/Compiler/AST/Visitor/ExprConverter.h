@@ -46,9 +46,10 @@ class ExprConverter : public Visitor
             ConvertUnaryExpr            = (1 << 6), // Wraps an unary expression if it's parent expression is also an unary expression (e.g. "-+x" to "-(+x)")
             ConvertSamplerBufferAccess  = (1 << 7),
             ConvertMatrixArrayAccess    = (1 << 8),
+            ConvertMatrixInitializers   = (1 << 9),
 
             // All conversion flags commonly used before visiting the sub nodes.
-            AllPreVisit                 = (ConvertVectorCompare | ConvertImageAccess | ConvertLog10 | ConvertSamplerBufferAccess | ConvertMatrixArrayAccess),
+            AllPreVisit                 = (ConvertVectorCompare | ConvertImageAccess | ConvertLog10 | ConvertSamplerBufferAccess | ConvertMatrixArrayAccess | ConvertMatrixInitializers),
 
             // All conversion flags commonly used after visiting the sub nodes.
             AllPostVisit                = (ConvertVectorSubscripts),
@@ -104,6 +105,9 @@ class ExprConverter : public Visitor
         void ConvertExprMatrixArrayAccess(ExprPtr& expr);
         void ConvertExprMatrixArrayAccessAssign(ExprPtr& expr, AssignExpr* assignExpr);
         void ConvertExprMatrixArrayAccessArray(ExprPtr& expr, ArrayExpr* arrayExpr, AssignExpr* assignExpr = nullptr);
+
+        // Converts matrix initializers accepting arguments in row-major order, into column-major
+        void ConvertExprMatrixInitializer(ExprPtr& expr);
 
         // Converts the expression by moving its sub expression into a bracket (e.g. "-+x" -> "-(+x)").
         void ConvertExprIntoBracket(ExprPtr& expr);
