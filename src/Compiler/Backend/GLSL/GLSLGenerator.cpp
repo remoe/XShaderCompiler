@@ -145,6 +145,8 @@ bool GLSLGenerator::IsWrappedIntrinsic(const Intrinsic intrinsic) const
         Intrinsic::Clip,
         Intrinsic::Lit,
         Intrinsic::SinCos,
+        Intrinsic::Matrix_ReadRow,
+        Intrinsic::Matrix_WriteRow
     };
     return (wrappedIntrinsics.find(intrinsic) != wrappedIntrinsics.end());
 }
@@ -2497,6 +2499,10 @@ void GLSLGenerator::WriteWrapperIntrinsics()
         WriteWrapperIntrinsicsLit(*usage);
     if (auto usage = program->FetchIntrinsicUsage(Intrinsic::SinCos))
         WriteWrapperIntrinsicsSinCos(*usage);
+    if (auto usage = program->FetchIntrinsicUsage(Intrinsic::Matrix_WriteRow))
+        WriteWrapperIntrinsicsMatrixWriteRow(*usage);
+    if (auto usage = program->FetchIntrinsicUsage(Intrinsic::Matrix_ReadRow))
+        WriteWrapperIntrinsicsMatrixReadRow(*usage);
 }
 
 void GLSLGenerator::WriteWrapperIntrinsicsClip(const IntrinsicUsage& usage)
@@ -2600,6 +2606,109 @@ void GLSLGenerator::WriteWrapperIntrinsicsSinCos(const IntrinsicUsage& usage)
                 WriteScopeOpen(compactWrappers_);
                 {
                     Write("s = sin(x), c = cos(x);");
+                }
+                WriteScopeClose();
+            }
+            EndLn();
+
+            wrappersWritten = true;
+        }
+    }
+
+    if (wrappersWritten)
+        Blank();
+}
+
+void GLSLGenerator::WriteWrapperIntrinsicsMatrixWriteRow(const IntrinsicUsage& usage)
+{
+    bool wrappersWritten = false;
+
+    for (const auto& argList : usage.argLists)
+    {
+        if (argList.argTypes.size() == 3)
+        {
+            DataType matrixType = argList.argTypes[0];
+
+            auto matrixDim = MatrixTypeDim(matrixType);
+            int numCols = matrixDim.second;
+
+            DataType baseType = BaseDataType(matrixType);
+            DataType rowType = VectorDataType(baseType, numCols);
+
+            BeginLn();
+            {
+                /* Write function signature */
+                WriteDataType(rowType, IsESSL());
+                Write(" xsc_matWriteRow(inout ");
+                WriteDataType(argList.argTypes[0], IsESSL());
+                Write(" m, ");
+                WriteDataType(argList.argTypes[1], IsESSL());
+                Write(" i, ");
+                WriteDataType(argList.argTypes[2], IsESSL());
+                Write(" v)");
+
+                /* Write function body */
+                WriteScopeOpen(compactWrappers_);
+                {
+                    for (int i = 0; i < numCols; i++)
+                        WriteLn("m[" + std::to_string(i) + "][i] = v[" + std::to_string(i) + "];");
+
+                    WriteLn("return v;");
+                }
+                WriteScopeClose();
+            }
+            EndLn();
+
+            wrappersWritten = true;
+        }
+    }
+
+    if (wrappersWritten)
+        Blank();
+}
+
+void GLSLGenerator::WriteWrapperIntrinsicsMatrixReadRow(const IntrinsicUsage& usage)
+{
+    bool wrappersWritten = false;
+
+    for (const auto& argList : usage.argLists)
+    {
+        if (argList.argTypes.size() == 2)
+        {
+            DataType matrixType = argList.argTypes[0];
+
+            auto matrixDim = MatrixTypeDim(matrixType);
+            int numCols = matrixDim.second;
+
+            DataType baseType = BaseDataType(matrixType);
+            DataType rowType = VectorDataType(baseType, numCols);
+
+            BeginLn();
+            {
+                /* Write function signature */
+                WriteDataType(rowType, IsESSL());
+                Write(" xsc_matReadRow(");
+                WriteDataType(argList.argTypes[0], IsESSL());
+                Write(" m, ");
+                WriteDataType(argList.argTypes[1], IsESSL());
+                Write(" i)");
+
+                /* Write function body */
+                WriteScopeOpen(compactWrappers_);
+                {
+                    Write("return ");
+                    WriteDataType(rowType, IsESSL());
+                    Write("(");
+
+                    for (int i = 0; i < numCols; i++)
+                    {
+                        if (i != 0)
+                            Write(", ");
+
+                        Write("m[" + std::to_string(i) + "][i]");
+                    }
+
+                    Write(");");
                 }
                 WriteScopeClose();
             }

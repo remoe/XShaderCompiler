@@ -140,6 +140,9 @@ void ExprConverter::ConvertExpr(ExprPtr& expr, const Flags& flags)
         if (enabled(ConvertSamplerBufferAccess))
             ConvertExprSamplerBufferAccess(expr);
 
+        if (enabled(ConvertMatrixArrayAccess))
+            ConvertExprMatrixArrayAccess(expr);
+
         if (enabled(ConvertVectorSubscripts))
             ConvertExprVectorSubscript(expr);
 
@@ -391,6 +394,95 @@ void ExprConverter::ConvertExprSamplerBufferAccessArray(ExprPtr& expr, ArrayExpr
                     else
                         RuntimeErr(R_MissingArrayIndexInOp(bufferTypeDen->ToString()), arrayExpr);
                 }
+            }
+        }
+    }
+}
+
+void ExprConverter::ConvertExprMatrixArrayAccess(ExprPtr& expr)
+{
+    if (!expr->flags(Expr::wasConverted))
+    {
+        /* Is this an array access to a matrix? */
+        if (auto assignExpr = expr->As<AssignExpr>())
+            ConvertExprMatrixArrayAccessAssign(expr, assignExpr);
+        else if (auto arrayExpr = expr->As<ArrayExpr>())
+            ConvertExprMatrixArrayAccessArray(expr, arrayExpr);
+    }
+}
+
+void ExprConverter::ConvertExprMatrixArrayAccessAssign(ExprPtr& expr, AssignExpr* assignExpr)
+{
+    if (auto arrayExpr = assignExpr->lvalueExpr->As<ArrayExpr>())
+        ConvertExprMatrixArrayAccessArray(expr, arrayExpr, assignExpr);
+}
+
+void ExprConverter::ConvertExprMatrixArrayAccessArray(ExprPtr& expr, ArrayExpr* arrayExpr, AssignExpr* assignExpr)
+{
+    auto typeDenoter = arrayExpr->prefixExpr->GetTypeDenoter();
+    if (auto subTypeDenoter = typeDenoter->GetSub())
+    {
+        size_t numDims = 0;
+        if(auto arrayTypeDenoter = subTypeDenoter->As<ArrayTypeDenoter>())
+        {
+            numDims = arrayTypeDenoter->arrayDims.size();
+            subTypeDenoter = arrayTypeDenoter->GetSubArray(numDims);
+        }
+
+        if (auto baseTypeDenoter = subTypeDenoter->As<BaseTypeDenoter>())
+        {
+            if (IsMatrixType(baseTypeDenoter->dataType))
+            {
+                size_t numIndices = arrayExpr->arrayIndices.size();
+                size_t numMatrixIndices = numIndices - numDims;
+                if (numMatrixIndices == 2)
+                {
+                    /* Swap matrix access row & column indices */
+                    std::swap(arrayExpr->arrayIndices[numIndices - 1], arrayExpr->arrayIndices[numIndices - 2]);
+                }
+                else if (numMatrixIndices == 1)
+                {
+                    /* 
+                     * Access to a single matrix row must be coverted to multiple column accesses, for which we use
+                     * a generated function.
+                     */
+
+                    /* Add array indices unrelated to matrix access */
+                    std::vector<ExprPtr> arrayIndices;
+                    for (int i = 0; i < (numIndices - 1); i++)
+                        arrayIndices.push_back(arrayExpr->arrayIndices[i]);
+
+                    std::vector<ExprPtr> args;
+
+                    auto objExprArray = ASTFactory::MakeObjectExpr(arrayExpr->FetchVarDecl());
+                    if (arrayIndices.size() == 0)
+                        args.push_back(objExprArray);
+                    else
+                        args.push_back(ASTFactory::MakeArrayExpr(objExprArray, arrayIndices));
+
+                    /* Add row access index */
+                    args.push_back(arrayExpr->arrayIndices[numIndices - 1]);
+
+                    auto matrixDim = MatrixTypeDim(baseTypeDenoter->dataType);
+                    DataType rowType = VectorDataType(baseTypeDenoter->dataType, matrixDim.second);
+
+                    auto rowTypeDenoter = std::make_shared<BaseTypeDenoter>();
+                    rowTypeDenoter->dataType = rowType;
+
+                    if(assignExpr)
+                    {
+                        args.push_back(assignExpr->rvalueExpr);
+
+                        expr = ASTFactory::MakeIntrinsicCallExpr(Intrinsic::Matrix_WriteRow, "xsc_matWriteRow", rowTypeDenoter, args);
+                    }
+                    else
+                    {
+                        expr = ASTFactory::MakeIntrinsicCallExpr(Intrinsic::Matrix_ReadRow, "xsc_matReadRow", rowTypeDenoter, args);
+                    }
+                }
+
+                expr->flags << Expr::wasConverted;
+                arrayExpr->flags << Expr::wasConverted;
             }
         }
     }
