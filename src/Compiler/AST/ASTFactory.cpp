@@ -206,12 +206,12 @@ ObjectExprPtr MakeObjectExpr(Decl* symbolRef)
     return MakeObjectExpr(symbolRef->ident.Original(), symbolRef);
 }
 
-ArrayExprPtr MakeArrayExpr(const ExprPtr& prefixExpr, const std::vector<ExprPtr>& arrayIndices)
+ArrayExprPtr MakeArrayExpr(const ExprPtr& prefixExpr, std::vector<ExprPtr>&& arrayIndices)
 {
     auto ast = MakeAST<ArrayExpr>();
     {
-        ast->prefixExpr = prefixExpr;
-        ast->arrayIndices = arrayIndices;
+        ast->prefixExpr     = prefixExpr;
+        ast->arrayIndices   = std::move(arrayIndices);
     }
     return ast;
 }

@@ -361,9 +361,9 @@ void ExprConverter::ConvertExprSamplerBufferAccess(ExprPtr& expr)
 void ExprConverter::ConvertExprSamplerBufferAccessArray(ExprPtr& expr, ArrayExpr* arrayExpr)
 {
     /* Fetch buffer type denoter from l-value prefix expression */
-    auto prefixTypeDen = arrayExpr->prefixExpr->GetTypeDenoter()->GetAliasedPtr();
+    auto prefixTypeDen = arrayExpr->prefixExpr->GetTypeDenoter()->GetSub();
 
-    size_t numDims = 0;
+    std::size_t numDims = 0;
     if (auto arrayTypeDenoter = prefixTypeDen->As<ArrayTypeDenoter>())
     {
         numDims = arrayTypeDenoter->arrayDims.size();
@@ -376,7 +376,8 @@ void ExprConverter::ConvertExprSamplerBufferAccessArray(ExprPtr& expr, ArrayExpr
         {
             /* Is the buffer declaration a sampler buffer? */
             const auto bufferType = bufferDecl->GetBufferType();
-            if (bufferType == BufferType::Buffer && numDims < arrayExpr->arrayIndices.size())
+
+            if (bufferType == BufferType::Buffer && numDims < arrayExpr->NumIndices())
             {
                 /* Get buffer type denoter from array indices of array access plus identifier */
                 //TODO: not sure if the buffer type must be derived with 'GetSub(arrayExpr)' again here???
