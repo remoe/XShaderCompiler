@@ -160,6 +160,9 @@ struct Options
     //! If true, matrices have row-major alignment. Otherwise the matrices have column-major alignment. By default false.
     bool    rowMajorAlignment       = false;
 
+    //! If true, generated GLSL code will support the 'ARB_separate_shader_objects' extension. By default false.
+    bool    separateShaders         = false;
+
     //! If true, code obfuscation is performed. By default false.
     bool    obfuscate               = false;
 

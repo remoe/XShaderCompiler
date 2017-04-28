@@ -1127,7 +1127,7 @@ struct CallExpr : public Expr
     {
         // If this function call is an intrinsic, it's wrapper function can be inlined (i.e. no wrapper function must be generated)
         // e.g. "clip(a), clip(b);" can not be inlined, due to the list expression.
-        FLAG( canInlineIntrinsicWrapper, 0 ),
+        FLAG( canInlineIntrinsicWrapper, 1 ),
     };
 
     TypeDenoterPtr DeriveTypeDenoter(const TypeDenoter* expectedTypeDenoter) override;

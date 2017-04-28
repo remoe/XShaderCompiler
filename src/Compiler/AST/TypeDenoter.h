@@ -122,6 +122,9 @@ struct TypeDenoter : std::enable_shared_from_this<TypeDenoter>
     // Returns either this type denoter or an aliased type.
     virtual const TypeDenoter& GetAliased() const;
 
+    // Returns either this type denoter or an aliased type.
+    virtual TypeDenoterPtr GetAliasedPtr();
+
     // Returns the number of array dimensions. By default 0.
     virtual unsigned int NumDimensions() const;
 
@@ -320,6 +323,7 @@ struct AliasTypeDenoter : public TypeDenoter
     TypeDenoterPtr GetSubArray(const std::size_t numArrayIndices, const AST* ast = nullptr) override;
 
     const TypeDenoter& GetAliased() const override;
+    TypeDenoterPtr GetAliasedPtr() override;
 
     const TypeDenoterPtr& GetAliasedTypeOrThrow(const AST* ast = nullptr) const;
 

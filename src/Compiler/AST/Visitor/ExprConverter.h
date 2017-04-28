@@ -45,9 +45,11 @@ class ExprConverter : public Visitor
             ConvertLog10                = (1 << 5), // Converts "log10(x)" to "(log(x) / log(10))"
             ConvertUnaryExpr            = (1 << 6), // Wraps an unary expression if it's parent expression is also an unary expression (e.g. "-+x" to "-(+x)")
             ConvertSamplerBufferAccess  = (1 << 7),
+            ConvertMatrixArrayAccess    = (1 << 8),
+            ConvertMatrixInitializers   = (1 << 9),
 
             // All conversion flags commonly used before visiting the sub nodes.
-            AllPreVisit                 = (ConvertVectorCompare | ConvertImageAccess | ConvertLog10 | ConvertSamplerBufferAccess),
+            AllPreVisit                 = (ConvertVectorCompare | ConvertImageAccess | ConvertLog10 | ConvertSamplerBufferAccess | ConvertMatrixArrayAccess | ConvertMatrixInitializers),
 
             // All conversion flags commonly used after visiting the sub nodes.
             AllPostVisit                = (ConvertVectorSubscripts),
@@ -98,6 +100,14 @@ class ExprConverter : public Visitor
         // Converts the expression from a sampler buffer access to the texelFetch intrinsic call (e.g. "buffer[2]" -> "texelFetch(buffer, 2)").
         void ConvertExprSamplerBufferAccess(ExprPtr& expr);
         void ConvertExprSamplerBufferAccessArray(ExprPtr& expr, ArrayExpr* arrayExpr);
+
+        // Converts matrix array accesses by flipping the row/column indices
+        void ConvertExprMatrixArrayAccess(ExprPtr& expr);
+        void ConvertExprMatrixArrayAccessAssign(ExprPtr& expr, AssignExpr* assignExpr);
+        void ConvertExprMatrixArrayAccessArray(ExprPtr& expr, ArrayExpr* arrayExpr, AssignExpr* assignExpr = nullptr);
+
+        // Converts matrix initializers accepting arguments in row-major order, into column-major
+        void ConvertExprMatrixInitializer(ExprPtr& expr);
 
         // Converts the expression by moving its sub expression into a bracket (e.g. "-+x" -> "-(+x)").
         void ConvertExprIntoBracket(ExprPtr& expr);

@@ -160,7 +160,7 @@ class GLSLGenerator : public Generator
         /* ----- Built-in block redeclarations ----- */
 
         void WriteBuiltinBlockRedeclarations();
-        void WritePerVertexBlockRedeclaration(bool input, const std::string& name = "");
+        void WriteBuiltinBlockRedeclarationsPerVertex(bool input, const std::string& name = "");
 
         /* ----- Layout ----- */
 
@@ -259,6 +259,9 @@ class GLSLGenerator : public Generator
         void WriteWrapperIntrinsicsClip(const IntrinsicUsage& usage);
         void WriteWrapperIntrinsicsLit(const IntrinsicUsage& usage);
         void WriteWrapperIntrinsicsSinCos(const IntrinsicUsage& usage);
+        void WriteWrapperIntrinsicsMatrixWriteRow(const IntrinsicUsage& usage);
+        void WriteWrapperIntrinsicsMatrixReadRow(const IntrinsicUsage& usage);
+        void WriteWrapperIntrinsicsMatrixConstruct(const IntrinsicUsage& usage);
 
         /* ----- Structure ----- */
 
@@ -305,7 +308,7 @@ class GLSLGenerator : public Generator
         bool                                    allowLineMarks_         = false;
         bool                                    compactWrappers_        = false;
         bool                                    alwaysBracedScopes_     = false;
-        bool                                    supportSeparateShaders_ = false;
+        bool                                    separateShaders_        = false;
 
         bool                                    isInsideInterfaceBlock_ = false;
 };
