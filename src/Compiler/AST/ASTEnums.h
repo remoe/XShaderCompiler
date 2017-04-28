@@ -287,6 +287,9 @@ DataType VectorDataType(const DataType baseDataType, int vectorSize);
 // Returns the matrix data type for the specified type, rows, and columns.
 DataType MatrixDataType(const DataType baseDataType, int rows, int columns);
 
+// Flips rows and columns on the provided matrix subscript and returns the flipped subscript
+std::string FlipMatrixSubscript(const std::string& s);
+
 // Returns the data type for the specified swizzle operator or throws and std::invalid_argument on failure.
 DataType SubscriptDataType(const DataType dataType, const std::string& subscript);
 
@@ -847,7 +850,11 @@ enum class Intrinsic
     Image_AtomicMin,            // GLSL only
     Image_AtomicMax,            // GLSL only
     Image_AtomicCompSwap,       // GLSL only
-    Image_AtomicExchange        // GLSL only
+    Image_AtomicExchange,       // GLSL only
+
+    Matrix_ReadRow,             // GLSL only (Generated intrinsic)
+    Matrix_WriteRow,            // GLSL only (Generated intrinsic)
+    Matrix_Construct            // GLSL only (Generated intrinsic)
 };
 
 // Container structure for all kinds of intrinsic call usages (can be used as std::map<Intrinsic, IntrinsicUsage>

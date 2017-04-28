@@ -206,14 +206,19 @@ ObjectExprPtr MakeObjectExpr(Decl* symbolRef)
     return MakeObjectExpr(symbolRef->ident.Original(), symbolRef);
 }
 
-ArrayExprPtr MakeArrayExpr(const ExprPtr& prefixExpr, const std::vector<int>& arrayIndices)
+ArrayExprPtr MakeArrayExpr(const ExprPtr& prefixExpr, const std::vector<ExprPtr>& arrayIndices)
 {
     auto ast = MakeAST<ArrayExpr>();
     {
-        ast->prefixExpr     = prefixExpr;
-        ast->arrayIndices   = MakeArrayIndices(arrayIndices);
+        ast->prefixExpr = prefixExpr;
+        ast->arrayIndices = arrayIndices;
     }
     return ast;
+}
+
+ArrayExprPtr MakeArrayExpr(const ExprPtr& prefixExpr, const std::vector<int>& arrayIndices)
+{
+    return MakeArrayExpr(prefixExpr, MakeArrayIndices(arrayIndices));
 }
 
 RegisterPtr MakeRegister(int slot, const RegisterType registerType)
