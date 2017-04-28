@@ -59,9 +59,11 @@ void GLSLGenerator::GenerateCodePrimary(
     allowExtensions_    = outputDesc.options.allowExtensions;
     explicitBinding_    = outputDesc.options.explicitBinding;
     preserveComments_   = outputDesc.options.preserveComments;
+    separateShaders_    = outputDesc.options.separateShaders;
     allowLineMarks_     = outputDesc.formatting.lineMarks;
     compactWrappers_    = outputDesc.formatting.compactWrappers;
     alwaysBracedScopes_ = outputDesc.formatting.alwaysBracedScopes;
+    
 
     for (const auto& s : outputDesc.vertexSemantics)
     {
@@ -266,6 +268,10 @@ IMPLEMENT_VISIT_PROC(Program)
 
     /* Write global input/output layouts */
     WriteGlobalLayouts();
+
+    /* Write redeclarations for built-in input/output blocks */
+    if(separateShaders_ && versionOut_ > OutputShaderVersion::GLSL140)
+        WriteBuiltinBlockRedeclarations();
 
     /* Write wrapper functions for special intrinsics */
     WriteWrapperIntrinsics();
@@ -952,7 +958,7 @@ void GLSLGenerator::WriteProgramHeader()
     /* Determine all required GLSL extensions with the GLSL extension agent */
     GLSLExtensionAgent extensionAgent;
     auto requiredExtensions = extensionAgent.DetermineRequiredExtensions(
-        *GetProgram(), versionOut_, GetShaderTarget(), allowExtensions_, explicitBinding_,
+        *GetProgram(), versionOut_, GetShaderTarget(), allowExtensions_, explicitBinding_, separateShaders_,
         [this](const std::string& msg, const AST* ast)
         {
             /* Report either error or warning whether extensions are allowed or not */
@@ -1165,6 +1171,96 @@ bool GLSLGenerator::WriteGlobalLayoutsCompute(const Program::LayoutComputeShader
         }
     );
     return true;
+}
+
+/* ----- Built-in block redeclarations ----- */
+
+void GLSLGenerator::WriteBuiltinBlockRedeclarations()
+{
+    switch (GetShaderTarget())
+    {
+        case ShaderTarget::TessellationControlShader:
+            WriteBuiltinBlockRedeclarationsPerVertex(true, "gl_in[gl_MaxPatchVertices]");
+            WriteBuiltinBlockRedeclarationsPerVertex(false, "gl_out[]");
+            break;
+        case ShaderTarget::TessellationEvaluationShader:
+            WriteBuiltinBlockRedeclarationsPerVertex(true, "gl_in[gl_MaxPatchVertices]");
+            WriteBuiltinBlockRedeclarationsPerVertex(false);
+            break;
+        case ShaderTarget::GeometryShader:
+            WriteBuiltinBlockRedeclarationsPerVertex(true, "gl_in[]");
+            WriteBuiltinBlockRedeclarationsPerVertex(false);
+            break;
+        case ShaderTarget::VertexShader:
+            WriteBuiltinBlockRedeclarationsPerVertex(false);
+            break;
+        default:
+            break;
+    }
+}
+
+void GLSLGenerator::WriteBuiltinBlockRedeclarationsPerVertex(bool input, const std::string& name)
+{
+    auto entryPoint = GetProgram()->entryPointRef;
+
+    /* Gather all semantics that are contained in the redeclared vertex block */
+    std::vector<Semantic> semantics;
+
+    if (input)
+    {
+        for (const auto& param : entryPoint->inputSemantics.varDeclRefsSV)
+            semantics.push_back(param->semantic);
+    }
+    else
+    {
+        for (const auto& param : entryPoint->outputSemantics.varDeclRefsSV)
+            semantics.push_back(param->semantic);
+
+        if (IsSystemSemantic(entryPoint->semantic))
+            semantics.push_back(entryPoint->semantic);
+    }
+
+    if (semantics.empty())
+        return;
+
+    /* Write input/output per-vertex block */
+    BeginLn();
+    {
+        Write(input ? "in" : "out");
+        Write(" gl_PerVertex");
+
+        WriteScopeOpen(false, name.empty());
+        {
+            for (const auto& semantic : semantics)
+            {
+                switch (semantic)
+                {
+                    case Semantic::VertexPosition:
+                        WriteLn("vec4 gl_Position;");
+                        break;
+                    case Semantic::PointSize:
+                        WriteLn("float gl_PointSize;");
+                        break;
+                    case Semantic::CullDistance:
+                        if (IsVKSL() || versionOut_ >= OutputShaderVersion::GLSL450)
+                            WriteLn("float gl_CullDistance[];");
+                        break;
+                    case Semantic::ClipDistance:
+                        WriteLn("float gl_ClipDistance[];");
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+        WriteScopeClose();
+
+        if (!name.empty())
+            WriteLn(name + ";");
+    }
+    EndLn();
+
+    Blank();
 }
 
 /* ----- Layout ----- */
@@ -2655,8 +2751,22 @@ void GLSLGenerator::WriteBufferDecl(BufferDecl* bufferDecl)
 
 void GLSLGenerator::WriteBufferDeclTexture(BufferDecl* bufferDecl)
 {
-    /* Determine GLSL sampler type (or VKSL texture type) */
-    auto bufferTypeKeyword = BufferTypeToKeyword(bufferDecl->GetBufferType(), bufferDecl->declStmntRef);
+    const std::string* bufferTypeKeyword = nullptr;
+
+    if (bufferDecl->flags(BufferDecl::isUsedForCompare) && !IsVKSL())
+    {
+        /* Convert type to a shadow sampler type */
+        SamplerType samplerType = TextureTypeToSamplerType(bufferDecl->GetBufferType());
+        SamplerType shadowSamplerType = SamplerTypeToShadowSamplerType(samplerType);
+
+        bufferTypeKeyword = SamplerTypeToKeyword(shadowSamplerType, bufferDecl->declStmntRef);
+    }
+    else
+    {
+        /* Determine GLSL sampler type (or VKSL texture type) */
+        bufferTypeKeyword = BufferTypeToKeyword(bufferDecl->GetBufferType(), bufferDecl->declStmntRef);
+    }
+
     if (!bufferTypeKeyword)
         return;
 
@@ -2717,7 +2827,15 @@ void GLSLGenerator::WriteBufferDeclStorageBuffer(BufferDecl* bufferDecl)
                 [&]() { WriteLayoutBinding(bufferDecl->slotRegisters); },
             }
         );
-        Write(*bufferTypeKeyword + " " + bufferDecl->ident);
+        Write(*bufferTypeKeyword + " ");
+        
+        if (nameMangling_.renameBufferFields)
+        {
+            Write(bufferDecl->ident);
+            bufferDecl->ident.AppendPrefix(nameMangling_.temporaryPrefix);
+        }
+        else
+            Write(nameMangling_.temporaryPrefix + bufferDecl->ident);
     }
     EndLn();
 

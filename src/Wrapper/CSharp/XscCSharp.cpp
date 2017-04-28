@@ -364,6 +364,7 @@ public ref class XscCompiler
                     PreferWrappers          = false;
                     UnrollArrayInitializers = false;
                     RowMajorAlignment       = false;
+                    SeparateShaders         = false;
                     Obfuscate               = false;
                     ShowAST                 = false;
                     ShowTimes               = false;
@@ -405,6 +406,9 @@ public ref class XscCompiler
                 //! If true, matrices have row-major alignment. Otherwise the matrices have column-major alignment. By default false.
                 property bool   RowMajorAlignment;
 
+                //! If true, generated GLSL code will support the 'ARB_separate_shader_objects' extension. By default false.
+                property bool   SeparateShaders;
+
                 //! If true, code obfuscation is performed. By default false.
                 property bool   Obfuscate;
 
@@ -430,6 +434,7 @@ public ref class XscCompiler
                     TemporaryPrefix     = gcnew String("xst_");
                     NamespacePrefix     = gcnew String("xsn_");
                     UseAlwaysSemantics  = false;
+                    RenameBufferFields  = false;
                 }
 
                 /**
@@ -467,6 +472,12 @@ public ref class XscCompiler
                 even for vertex input and fragment output. Otherwise, their original identifiers are used. By default false.
                 */
                 property bool       UseAlwaysSemantics;
+
+                /**
+                \brief If true, the data fields of a 'buffer'-objects is renamed rather than the outer identifier. By default false.
+                \remarks This can be useful for external diagnostic tools, to access the original identifier.
+                */
+                property bool       RenameBufferFields;
 
         };
 
@@ -1011,6 +1022,7 @@ bool XscCompiler::CompileShader(ShaderInput^ inputDesc, ShaderOutput^ outputDesc
     out.options.preferWrappers          = outputDesc->Options->PreferWrappers;
     out.options.unrollArrayInitializers = outputDesc->Options->UnrollArrayInitializers;
     out.options.rowMajorAlignment       = outputDesc->Options->RowMajorAlignment;
+    out.options.separateShaders         = outputDesc->Options->SeparateShaders;
     out.options.obfuscate               = outputDesc->Options->Obfuscate;
     out.options.showAST                 = outputDesc->Options->ShowAST;
     out.options.showTimes               = outputDesc->Options->ShowTimes;
@@ -1031,6 +1043,7 @@ bool XscCompiler::CompileShader(ShaderInput^ inputDesc, ShaderOutput^ outputDesc
     out.nameMangling.temporaryPrefix    = ToStdString(outputDesc->NameMangling->TemporaryPrefix);
     out.nameMangling.namespacePrefix    = ToStdString(outputDesc->NameMangling->NamespacePrefix);
     out.nameMangling.useAlwaysSemantics = outputDesc->NameMangling->UseAlwaysSemantics;
+    out.nameMangling.renameBufferFields = outputDesc->NameMangling->RenameBufferFields;
 
     /* Compile shader */
     bool result = false;

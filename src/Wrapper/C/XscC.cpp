@@ -88,6 +88,7 @@ static void InitializeOptions(struct XscOptions* s)
     s->preferWrappers           = false;
     s->unrollArrayInitializers  = false;
     s->rowMajorAlignment        = false;
+    s->separateShaders          = false;
     s->obfuscate                = false;
     s->showAST                  = false;
     s->showTimes                = false;
@@ -101,6 +102,7 @@ static void InitializeNameMangling(struct XscNameMangling* s)
     s->temporaryPrefix      = "xst_";
     s->namespacePrefix      = "xsn_";
     s->useAlwaysSemantics   = false;
+    s->renameBufferFields   = false;
 }
 
 static void InitializeIncludeHandler(struct XscIncludeHandler* s)
@@ -377,6 +379,7 @@ XSC_EXPORT bool XscCompileShader(
     out.options.preferWrappers          = outputDesc->options.preferWrappers;
     out.options.unrollArrayInitializers = outputDesc->options.unrollArrayInitializers;
     out.options.rowMajorAlignment       = outputDesc->options.rowMajorAlignment;
+    out.options.separateShaders         = outputDesc->options.separateShaders;
     out.options.obfuscate               = outputDesc->options.obfuscate;
     out.options.showAST                 = outputDesc->options.showAST;
     out.options.showTimes               = outputDesc->options.showTimes;
@@ -397,6 +400,7 @@ XSC_EXPORT bool XscCompileShader(
     out.nameMangling.temporaryPrefix    = ReadStringC(outputDesc->nameMangling.temporaryPrefix);
     out.nameMangling.namespacePrefix    = ReadStringC(outputDesc->nameMangling.namespacePrefix);
     out.nameMangling.useAlwaysSemantics = outputDesc->nameMangling.useAlwaysSemantics;
+    out.nameMangling.renameBufferFields = outputDesc->nameMangling.renameBufferFields;
 
     /* Initialize log */
     Xsc::StdLog logPrimaryStd;

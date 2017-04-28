@@ -160,6 +160,9 @@ struct Options
     //! If true, matrices have row-major alignment. Otherwise the matrices have column-major alignment. By default false.
     bool    rowMajorAlignment       = false;
 
+    //! If true, generated GLSL code will support the 'ARB_separate_shader_objects' extension. By default false.
+    bool    separateShaders         = false;
+
     //! If true, code obfuscation is performed. By default false.
     bool    obfuscate               = false;
 
@@ -208,6 +211,12 @@ struct NameMangling
     even for vertex input and fragment output. Otherwise, their original identifiers are used. By default false.
     */
     bool            useAlwaysSemantics  = false;
+
+    /**
+    \brief If true, the data fields of a 'buffer'-objects is renamed rather than the outer identifier. By default false.
+    \remarks This can be useful for external diagnostic tools, to access the original identifier.
+    */
+    bool            renameBufferFields  = false;
 };
 
 //! Shader input descriptor structure.

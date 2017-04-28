@@ -206,16 +206,17 @@ void DebuggerView::CreateLayoutPropertyGridOptions(wxPropertyGrid& pg)
 
     pg.Append(new wxBoolProperty("Allow Extensions", "extensions"));
     pg.Append(new wxBoolProperty("Explicit Binding", "binding"));
+    pg.Append(new wxBoolProperty("Auto. Binding", "autoBinding"));
+    pg.Append(new wxIntProperty("Auto. Binding Start Slot", "autoBindingStartSlot"));
     pg.Append(new wxBoolProperty("Optimize", "optimize"));
     pg.Append(new wxBoolProperty("Prefer Wrappers", "wrappers"));
     pg.Append(new wxBoolProperty("Preprocess Only", "preprocess"));
     pg.Append(new wxBoolProperty("Preserve Comments", "comments"));
     pg.Append(new wxBoolProperty("Unroll Array Initializers", "unrollInitializers"));
     pg.Append(new wxBoolProperty("Row-Major Alignment", "rowMajor"));
+    pg.Append(new wxBoolProperty("Separate Shaders", "separateShaders"));
     pg.Append(new wxBoolProperty("Obfuscate", "obfuscate"));
     pg.Append(new wxBoolProperty("Show AST", "showAST"));
-    pg.Append(new wxBoolProperty("Auto. Binding", "autoBinding"));
-    pg.Append(new wxIntProperty("Auto. Binding Start Slot", "autoBindingStartSlot"));
 }
 
 void DebuggerView::CreateLayoutPropertyGridFormatting(wxPropertyGrid& pg)
@@ -241,6 +242,7 @@ void DebuggerView::CreateLayoutPropertyGridNameMangling(wxPropertyGrid& pg)
     pg.Append(new wxStringProperty("Temporary Prefix", "prefixTemp", "xst_"));
     pg.Append(new wxStringProperty("Namespace Prefix", "prefixNamespace", "xsn_"));
     pg.Append(new wxBoolProperty("Use Always Semantics", "useAlwaysSemantics", false));
+    pg.Append(new wxBoolProperty("Rename Buffer Fields", "renameBufferFields", false));
 }
 
 void DebuggerView::CreateLayoutSubSplitter()
@@ -438,6 +440,8 @@ void DebuggerView::OnPropertyGridChange(wxPropertyGridEvent& event)
         shaderOutput_.options.autoBinding = ValueBool();
     else if (name == "autoBindingStartSlot")
         shaderOutput_.options.autoBindingStartSlot = ValueInt();
+    else if (name == "separateShaders")
+        shaderOutput_.options.separateShaders = ValueBool();
 
     /* --- Formatting --- */
     else if (name == "blanks")
@@ -466,6 +470,8 @@ void DebuggerView::OnPropertyGridChange(wxPropertyGridEvent& event)
         shaderOutput_.nameMangling.namespacePrefix = ValueStr();
     else if (name == "useAlwaysSemantics")
         shaderOutput_.nameMangling.useAlwaysSemantics = ValueBool();
+    else if (name == "renameBufferFields")
+        shaderOutput_.nameMangling.renameBufferFields = ValueBool();
 
     TranslateInputToOutput();
 }

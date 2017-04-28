@@ -83,21 +83,11 @@ CommandFactory::CommandFactory()
         RowMajorAlignmentCommand,
         AutoBindingCommand,
         AutoBindingStartSlotCommand,
-
-        FormatBlanksCommand,
-        FormatLineMarksCommand,
-        FormatIndentCommand,
-        FormatLineSeparationCommand,
-        FormatCompactWrappersCommand,
-        FormatBracedScopeCommand,
-        FormatNewLineScopeCommand,
-
-        PrefixInputCommand,
-        PrefixOutputCommand,
-        PrefixReservedWordCommand,
-        PrefixTemporaryCommand,
-        PrefixNamespaceCommand,
-        AlwaysUseSemanticsCommand
+        FormattingCommand,
+        IndentCommand,
+        PrefixCommand,
+        NameManglingCommand,
+        SeparateShadersCommand
     >();
 }
 
