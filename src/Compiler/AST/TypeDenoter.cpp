@@ -129,11 +129,6 @@ const TypeDenoter& TypeDenoter::GetAliased() const
     return *this;
 }
 
-TypeDenoterPtr TypeDenoter::GetAliasedPtr()
-{
-    return shared_from_this();
-}
-
 unsigned int TypeDenoter::NumDimensions() const
 {
     return 0;
@@ -768,11 +763,6 @@ TypeDenoterPtr AliasTypeDenoter::GetSubArray(const std::size_t numArrayIndices, 
 const TypeDenoter& AliasTypeDenoter::GetAliased() const
 {
     return GetAliasedTypeOrThrow()->GetAliased();
-}
-
-TypeDenoterPtr AliasTypeDenoter::GetAliasedPtr()
-{
-    return GetAliasedTypeOrThrow()->GetAliasedPtr();
 }
 
 const TypeDenoterPtr& AliasTypeDenoter::GetAliasedTypeOrThrow(const AST* ast) const
