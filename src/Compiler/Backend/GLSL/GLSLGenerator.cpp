@@ -2839,8 +2839,6 @@ void GLSLGenerator::WriteBufferDeclStorageBuffer(BufferDecl* bufferDecl)
     }
     EndLn();
 
-    bufferDecl->ident.AppendPrefix(nameMangling_.temporaryPrefix);
-
     /* Write buffer array (of variable size) */
     WriteScopeOpen(false, true);
     {
