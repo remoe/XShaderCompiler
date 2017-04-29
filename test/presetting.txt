@@ -172,3 +172,6 @@
 
 [MemoryBarrierTest1 VS]
 -T comp -E main -o output/* MemoryBarrierTest1.hlsl
+
+[TexelFetchTest1 VS]
+-T vert -E main -o output/* TexelFetchTest1.hlsl

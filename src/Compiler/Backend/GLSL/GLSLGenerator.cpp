@@ -150,7 +150,7 @@ bool GLSLGenerator::IsWrappedIntrinsic(const Intrinsic intrinsic) const
         Intrinsic::SinCos,
         Intrinsic::Matrix_ReadRow,
         Intrinsic::Matrix_WriteRow,
-        Intrinsic::Matrix_Construct
+        Intrinsic::Matrix_Construct,
         Intrinsic::GroupMemoryBarrierWithGroupSync,
         Intrinsic::DeviceMemoryBarrier,
         Intrinsic::DeviceMemoryBarrierWithGroupSync,
