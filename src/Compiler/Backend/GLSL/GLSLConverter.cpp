@@ -1064,7 +1064,7 @@ void GLSLConverter::ConvertIntrinsicCallImageAtomic(CallExpr* ast)
                 break;
             }
 
-            exprConverter_.ConvertExprIfCastRequired(args[1], VectorDataType(baseDataType, numDims), true);
+            exprConverter_.ConvertExprIfCastRequired(args[1], VectorDataType(DataType::Int, numDims), true);
             dataArgOffset = 2;
         }
 
