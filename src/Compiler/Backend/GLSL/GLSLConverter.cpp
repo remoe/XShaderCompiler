@@ -945,6 +945,10 @@ void GLSLConverter::ConvertIntrinsicCallTextureLoad(CallExpr* ast)
                 /* GLSL doesn't support offset for MS textures */
                 if (ast->intrinsic == Intrinsic::Texture_Load_3)
                     RuntimeErr(R_FailedToMapClassIntrinsicOverload(ast->ident, BufferTypeToString(bufferTypeDen->bufferType)), ast);
+
+                /* Ensure argument: int Sample */
+                if (args.size() >= 3)
+                    exprConverter_.ConvertExprIfCastRequired(args[2], DataType::Int, true);
             }
             else if (bufferTypeDen->bufferType == BufferType::Buffer)
             {
