@@ -262,6 +262,7 @@ class GLSLGenerator : public Generator
         void WriteWrapperIntrinsicsMatrixWriteRow(const IntrinsicUsage& usage);
         void WriteWrapperIntrinsicsMatrixReadRow(const IntrinsicUsage& usage);
         void WriteWrapperIntrinsicsMatrixConstruct(const IntrinsicUsage& usage);
+        void WriteWrapperIntrinsicMemoryBarrier(Intrinsic barrierIntrinsic, bool groupSync, const IntrinsicUsage& usage);
 
         /* ----- Structure ----- */
 
