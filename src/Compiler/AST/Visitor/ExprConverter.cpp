@@ -555,7 +555,7 @@ void ExprConverter::ConvertExprMatrixArrayAccessArray(ExprPtr& expr, ArrayExpr* 
                     if (arrayIndices.size() == 0)
                         args.push_back(objExprArray);
                     else
-                        args.push_back(ASTFactory::MakeArrayExpr(objExprArray, arrayIndices));
+                        args.push_back(ASTFactory::MakeArrayExpr(objExprArray, std::move(arrayIndices)));
 
                     /* Add row access index */
                     args.push_back(arrayExpr->arrayIndices[numIndices - 1]);
