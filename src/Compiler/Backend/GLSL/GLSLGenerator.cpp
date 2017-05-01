@@ -148,9 +148,6 @@ bool GLSLGenerator::IsWrappedIntrinsic(const Intrinsic intrinsic) const
         Intrinsic::Clip,
         Intrinsic::Lit,
         Intrinsic::SinCos,
-        Intrinsic::Matrix_ReadRow,
-        Intrinsic::Matrix_WriteRow,
-        Intrinsic::Matrix_Construct,
         Intrinsic::GroupMemoryBarrierWithGroupSync,
         Intrinsic::DeviceMemoryBarrier,
         Intrinsic::DeviceMemoryBarrierWithGroupSync,
@@ -1909,26 +1906,7 @@ void GLSLGenerator::WriteObjectExprIdent(const ObjectExpr& objectExpr, bool writ
             Write(symbol->ident);
     }
     else
-    {
-        std::string ident = objectExpr.ident;
-
-        /* If accessing a matrix subscript, flip row and column indices */
-        if(auto prefixExpr = objectExpr.prefixExpr)
-        {
-            if(auto typeDenoter = prefixExpr->GetTypeDenoter())
-            {
-                if(auto baseTypeDenoter = typeDenoter->As<BaseTypeDenoter>())
-                {
-                    if(IsMatrixType(baseTypeDenoter->dataType))
-                    {
-                        ident = FlipMatrixSubscript(ident);
-                    }
-                }
-            }
-        }
-
-        Write(ident);
-    }
+        Write(objectExpr.ident);
 }
 
 /*
@@ -2726,6 +2704,33 @@ void GLSLGenerator::WriteWrapperIntrinsicsSinCos(const IntrinsicUsage& usage)
 
     if (wrappersWritten)
         Blank();
+}
+
+static std::string GetWrapperNameForMemoryBarrier(const Intrinsic intrinsic, bool groupSync)
+{
+    std::string s;
+
+    switch (intrinsic)
+    {
+        case Intrinsic::GroupMemoryBarrier:
+            s += "Group";
+            break;
+        case Intrinsic::DeviceMemoryBarrier:
+            s += "Device";
+            break;
+        case Intrinsic::AllMemoryBarrier:
+            s += "All";
+            break;
+        default:
+            return "";
+    }
+
+    s += "MemoryBarrier";
+
+    if (groupSync)
+        s += "WithGroupSync";
+
+    return s;
 }
 
 void GLSLGenerator::WriteWrapperIntrinsicsMemoryBarrier(const Intrinsic intrinsic, bool groupSync)
