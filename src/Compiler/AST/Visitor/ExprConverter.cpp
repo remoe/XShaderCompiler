@@ -102,28 +102,28 @@ int ExprConverter::GetTextureDimFromExpr(Expr* expr, const AST* ast)
             /* Determine vector size for texture intrinsic parameters by texture buffer type */
             switch (bufferTypeDen->bufferType)
             {
-            case BufferType::Buffer:
-            case BufferType::RWBuffer:
-            case BufferType::Texture1D:
-            case BufferType::RWTexture1D:
-                return 1;
-            case BufferType::Texture1DArray:
-            case BufferType::RWTexture1DArray:
-            case BufferType::Texture2D:
-            case BufferType::RWTexture2D:
-            case BufferType::Texture2DMS:
-                return 2;
-            case BufferType::Texture2DArray:
-            case BufferType::RWTexture2DArray:
-            case BufferType::Texture2DMSArray:
-            case BufferType::Texture3D:
-            case BufferType::RWTexture3D:
-            case BufferType::TextureCube:
-                return 3;
-            case BufferType::TextureCubeArray:
-                return 4;
-            default:
-                break;
+                case BufferType::Buffer:
+                case BufferType::RWBuffer:
+                case BufferType::Texture1D:
+                case BufferType::RWTexture1D:
+                    return 1;
+                case BufferType::Texture1DArray:
+                case BufferType::RWTexture1DArray:
+                case BufferType::Texture2D:
+                case BufferType::RWTexture2D:
+                case BufferType::Texture2DMS:
+                    return 2;
+                case BufferType::Texture2DArray:
+                case BufferType::RWTexture2DArray:
+                case BufferType::Texture2DMSArray:
+                case BufferType::Texture3D:
+                case BufferType::RWTexture3D:
+                case BufferType::TextureCube:
+                    return 3;
+                case BufferType::TextureCubeArray:
+                    return 4;
+                default:
+                    break;
             }
         }
         else if (auto samplerTypeDen = typeDen.As<SamplerTypeDenoter>())
@@ -131,15 +131,15 @@ int ExprConverter::GetTextureDimFromExpr(Expr* expr, const AST* ast)
             /* Determine vector size for texture intrinsic parameters by sampler type */
             switch (samplerTypeDen->samplerType)
             {
-            case SamplerType::Sampler1D:
-                return 1;
-            case SamplerType::Sampler2D:
-                return 2;
-            case SamplerType::Sampler3D:
-            case SamplerType::SamplerCube:
-                return 3;
-            default:
-                break;
+                case SamplerType::Sampler1D:
+                    return 1;
+                case SamplerType::Sampler2D:
+                    return 2;
+                case SamplerType::Sampler3D:
+                case SamplerType::SamplerCube:
+                    return 3;
+                default:
+                    break;
             }
         }
         RuntimeErr(R_FailedToGetTextureDim, ast);
@@ -230,12 +230,6 @@ void ExprConverter::ConvertExpr(ExprPtr& expr, const Flags& flags)
 
         if (enabled(ConvertSamplerBufferAccess))
             ConvertExprSamplerBufferAccess(expr);
-
-        if (enabled(ConvertMatrixArrayAccess))
-            ConvertExprMatrixArrayAccess(expr);
-
-        if (enabled(ConvertMatrixInitializers))
-            ConvertExprMatrixInitializer(expr);
 
         if (enabled(ConvertVectorSubscripts))
             ConvertExprVectorSubscript(expr);
@@ -367,7 +361,7 @@ void ExprConverter::ConvertExprImageAccessArray(ExprPtr& expr, ArrayExpr* arrayE
     /* Fetch buffer type denoter from l-value prefix expression */
     auto prefixTypeDen = arrayExpr->prefixExpr->GetTypeDenoter()->GetSub();
 
-    size_t numDims = 0;
+    std::size_t numDims = 0;
     if (auto arrayTypeDenoter = prefixTypeDen->As<ArrayTypeDenoter>())
     {
         numDims = arrayTypeDenoter->arrayDims.size();
@@ -533,134 +527,6 @@ void ExprConverter::ConvertExprSamplerBufferAccessArray(ExprPtr& expr, ArrayExpr
     }
 }
 
-void ExprConverter::ConvertExprMatrixArrayAccess(ExprPtr& expr)
-{
-    if (!expr->flags(Expr::wasConverted))
-    {
-        /* Is this an array access to a matrix? */
-        if (auto assignExpr = expr->As<AssignExpr>())
-            ConvertExprMatrixArrayAccessAssign(expr, assignExpr);
-        else if (auto arrayExpr = expr->As<ArrayExpr>())
-            ConvertExprMatrixArrayAccessArray(expr, arrayExpr);
-    }
-}
-
-void ExprConverter::ConvertExprMatrixArrayAccessAssign(ExprPtr& expr, AssignExpr* assignExpr)
-{
-    if (auto arrayExpr = assignExpr->lvalueExpr->As<ArrayExpr>())
-        ConvertExprMatrixArrayAccessArray(expr, arrayExpr, assignExpr);
-}
-
-void ExprConverter::ConvertExprMatrixArrayAccessArray(ExprPtr& expr, ArrayExpr* arrayExpr, AssignExpr* assignExpr)
-{
-    auto typeDenoter = arrayExpr->prefixExpr->GetTypeDenoter();
-    if (auto subTypeDenoter = typeDenoter->GetSub())
-    {
-        size_t numDims = 0;
-        if(auto arrayTypeDenoter = subTypeDenoter->As<ArrayTypeDenoter>())
-        {
-            numDims = arrayTypeDenoter->arrayDims.size();
-            subTypeDenoter = arrayTypeDenoter->GetSubArray(numDims);
-        }
-
-        if (auto baseTypeDenoter = subTypeDenoter->As<BaseTypeDenoter>())
-        {
-            if (IsMatrixType(baseTypeDenoter->dataType))
-            {
-                size_t numIndices = arrayExpr->arrayIndices.size();
-                size_t numMatrixIndices = numIndices - numDims;
-                if (numMatrixIndices == 2)
-                {
-                    /* Swap matrix access row & column indices */
-                    std::swap(arrayExpr->arrayIndices[numIndices - 1], arrayExpr->arrayIndices[numIndices - 2]);
-                }
-                else if (numMatrixIndices == 1)
-                {
-                    /* 
-                     * Access to a single matrix row must be coverted to multiple column accesses, for which we use
-                     * a generated function.
-                     */
-
-                    /* Add array indices unrelated to matrix access */
-                    std::vector<ExprPtr> arrayIndices;
-                    for (int i = 0; i < (numIndices - 1); i++)
-                        arrayIndices.push_back(arrayExpr->arrayIndices[i]);
-
-                    std::vector<ExprPtr> args;
-
-                    auto objExprArray = ASTFactory::MakeObjectExpr(arrayExpr->FetchVarDecl());
-                    if (arrayIndices.size() == 0)
-                        args.push_back(objExprArray);
-                    else
-                        args.push_back(ASTFactory::MakeArrayExpr(objExprArray, std::move(arrayIndices)));
-
-                    /* Add row access index */
-                    args.push_back(arrayExpr->arrayIndices[numIndices - 1]);
-
-                    auto matrixDim = MatrixTypeDim(baseTypeDenoter->dataType);
-                    DataType rowType = VectorDataType(baseTypeDenoter->dataType, matrixDim.second);
-
-                    auto rowTypeDenoter = std::make_shared<BaseTypeDenoter>();
-                    rowTypeDenoter->dataType = rowType;
-
-                    if(assignExpr)
-                    {
-                        args.push_back(assignExpr->rvalueExpr);
-
-                        expr = ASTFactory::MakeIntrinsicCallExpr(Intrinsic::Matrix_WriteRow, "xsc_matWriteRow", rowTypeDenoter, args);
-                    }
-                    else
-                    {
-                        expr = ASTFactory::MakeIntrinsicCallExpr(Intrinsic::Matrix_ReadRow, "xsc_matReadRow", rowTypeDenoter, args);
-                    }
-                }
-
-                expr->flags << Expr::wasConverted;
-                arrayExpr->flags << Expr::wasConverted;
-            }
-        }
-    }
-}
-
-void ExprConverter::ConvertExprMatrixInitializer(ExprPtr& expr)
-{
-    /* Is this a matrix constructor or initializer */
-    if (auto callExpr = expr->As<CallExpr>())
-    {
-        if(auto typeDenoter = callExpr->typeDenoter)
-        {
-            if(auto baseTypeDenoter = typeDenoter->As<BaseTypeDenoter>())
-            {
-                if (IsMatrixType(baseTypeDenoter->dataType))
-                {
-                    DataType matrixType = baseTypeDenoter->dataType;
-
-                    auto matrixDim = MatrixTypeDim(matrixType);
-                    int numRows = matrixDim.first;
-                    int numCols = matrixDim.second;
-
-                    if (callExpr->arguments.size() == (numRows * numCols))
-                    {
-                        std::vector<ExprPtr> reorderedArgs;
-                        for (int i = 0; i < numRows; i++)
-                            for (int j = 0; j < numCols; j++)
-                                reorderedArgs.push_back(callExpr->arguments[j * numRows + i]);
-
-                        callExpr->arguments = reorderedArgs;
-                    }
-                    else if (callExpr->arguments.size() == numRows)
-                    {
-                        auto matrixTypeDenoter = std::make_shared<BaseTypeDenoter>();
-                        matrixTypeDenoter->dataType = matrixType;
-
-                        expr = ASTFactory::MakeIntrinsicCallExpr(Intrinsic::Matrix_Construct, "xsc_matConstruct", matrixTypeDenoter, callExpr->arguments);
-                    }
-                }
-            }
-        }
-    }
-}
-
 void ExprConverter::ConvertExprIntrinsicCallLog10(ExprPtr& expr)
 {
     /* Is this a call expression to the "log10" intrinisc? */
@@ -718,9 +584,6 @@ void ExprConverter::ConvertExprTargetTypeInitializer(ExprPtr& expr, InitializerE
 
     /* Convert initializer expression into type constructor */
     expr = ASTFactory::MakeTypeCtorCallExpr(targetTypeDen.Copy(), initExpr->exprs);
-
-    if (conversionFlags_(ConvertMatrixInitializers))
-        ConvertExprMatrixInitializer(expr);
 }
 
 /* ------- Visit functions ------- */
@@ -889,6 +752,23 @@ IMPLEMENT_VISIT_PROC(CallExpr)
     Flags preVisitFlags = AllPreVisit;
     if (IsInterlockedIntristic(ast->intrinsic))
         preVisitFlags.Remove(ConvertImageAccess);
+
+    /* Convert mul intrinsic calls */
+    if (ast->intrinsic == Intrinsic::Mul && ast->arguments.size() == 2)
+    {
+        if (conversionFlags_(ConvertMatrixLayout))
+        {
+            /* Re-arrange order of arguments */
+            std::swap(ast->arguments[0], ast->arguments[1]);
+        }
+
+        /* Convert "mul" intrinsic to "dot" intrinsic for vector-vector multiplication */
+        const auto& typeDenArg0 = ast->arguments[0]->GetTypeDenoter()->GetAliased();
+        const auto& typeDenArg1 = ast->arguments[1]->GetTypeDenoter()->GetAliased();
+
+        if (typeDenArg0.IsVector() && typeDenArg1.IsVector())
+            ast->intrinsic = Intrinsic::Dot;
+    }
 
     ConvertExpr(ast->prefixExpr, AllPreVisit);
     ConvertExprList(ast->arguments, preVisitFlags);
