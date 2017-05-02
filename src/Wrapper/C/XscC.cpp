@@ -66,32 +66,33 @@ static struct CompilerContext g_compilerContext;
 
 static void InitializeFormatting(struct XscFormatting* s)
 {
-    s->indent               = "    ";
-    s->blanks               = true;
-    s->lineMarks            = false;
-    s->compactWrappers      = false;
     s->alwaysBracedScopes   = false;
-    s->newLineOpenScope     = true;
+    s->blanks               = true;
+    s->compactWrappers      = false;
+    s->indent               = "    ";
+    s->lineMarks            = false;
     s->lineSeparation       = true;
+    s->newLineOpenScope     = true;
 }
 
 static void InitializeOptions(struct XscOptions* s)
 {
-    s->optimize                 = false;
-    s->preprocessOnly           = false;
-    s->validateOnly             = false;
     s->allowExtensions          = false;
-    s->explicitBinding          = false;
     s->autoBinding              = false;
     s->autoBindingStartSlot     = 0;
+    s->explicitBinding          = false;
+    s->obfuscate                = false;
+    s->optimize                 = false;
+    s->preprocessOnly           = false;
     s->preserveComments         = false;
     s->preferWrappers           = false;
-    s->unrollArrayInitializers  = false;
     s->rowMajorAlignment        = false;
+    s->separateSamplers         = true;
     s->separateShaders          = false;
-    s->obfuscate                = false;
     s->showAST                  = false;
     s->showTimes                = false;
+    s->unrollArrayInitializers  = false;
+    s->validateOnly             = false;
 }
 
 static void InitializeNameMangling(struct XscNameMangling* s)
@@ -380,6 +381,7 @@ XSC_EXPORT bool XscCompileShader(
     out.options.unrollArrayInitializers = outputDesc->options.unrollArrayInitializers;
     out.options.rowMajorAlignment       = outputDesc->options.rowMajorAlignment;
     out.options.separateShaders         = outputDesc->options.separateShaders;
+    out.options.separateSamplers        = outputDesc->options.separateSamplers;
     out.options.obfuscate               = outputDesc->options.obfuscate;
     out.options.showAST                 = outputDesc->options.showAST;
     out.options.showTimes               = outputDesc->options.showTimes;
