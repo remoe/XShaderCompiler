@@ -179,20 +179,20 @@ public ref class XscCompiler
             All                     = (~0u),    // All warnings.
         };
 
-#ifdef XSC_ENABLE_LANGUAGE_EXT
-
-        //! Language extensions.
+        /**
+        \brief Language extension flags.
+        \remakrs This is only supported, if the compiler was build with the 'XSC_ENABLE_LANGUAGE_EXT' macro.
+        */
         [Flags]
         enum class Extensions : System::UInt32
         {
-            Disabled                = 0,        // No extensions.
+            Disabled        = 0,        // No extensions.
 
-            LayoutAttribute         = (1 << 0), //!< Enables the 'layout' attribute.
+            LayoutAttribute = (1 << 0), //!< Enables the 'layout' attribute extension (e.g. "[layout(rgba8)]").
+            SpaceAttribute  = (1 << 1), //!< Enables the 'space' attribute extension for a stronger type system (e.g. "[space(OBJECT, MODEL)]").
 
-            All                     = (~0u)     //!< All extensions.
+            All             = (~0u)     //!< All extensions.
         };
-
-#endif
 
         /**
         \brief Static sampler state descriptor structure (D3D11_SAMPLER_DESC).
@@ -532,10 +532,7 @@ public ref class XscCompiler
                     SecondaryEntryPoint = nullptr;
                     WarningFlags        = Warnings::Disabled;
                     IncludeHandler      = nullptr;
-
-                    #ifdef XSC_ENABLE_LANGUAGE_EXT
                     ExtensionFlags      = Extensions::Disabled;
-                    #endif
                 }
 
                 //! Specifies the filename of the input shader code. This is an optional attribute, and only a hint to the compiler.
@@ -569,20 +566,17 @@ public ref class XscCompiler
                 property Warnings                       WarningFlags;
 
                 /**
+                \brief Language extension flags. This can be a bitwise OR combination of the "Extensions" enumeration entries. By default 0.
+                \remarks This is ignored, if the compiler was not build with the 'XSC_ENABLE_LANGUAGE_EXT' macro.
+                \see Extensions
+                */
+                property Extensions                     ExtensionFlags;
+
+                /**
                 \brief Optional handler to handle '#include'-directives. By default null.
                 \remarks If this is null, the default include handler will be used, which will include files with the STL input file streams.
                 */
                 property SourceIncludeHandler^          IncludeHandler;
-
-#ifdef XSC_ENABLE_LANGUAGE_EXT
-
-                /**
-                \brief Enabled language extensions. This can be a bitwise OR combination of the "Extensions" enumeration entries. By default 0.
-                \see Extensions
-                */
-                property Extensions                    ExtensionFlags;
-
-#endif
 
         };
 
@@ -1023,10 +1017,7 @@ bool XscCompiler::CompileShader(ShaderInput^ inputDesc, ShaderOutput^ outputDesc
     in.secondaryEntryPoint  = ToStdString(inputDesc->SecondaryEntryPoint);
     in.warnings             = static_cast<unsigned int>(inputDesc->WarningFlags);
     in.includeHandler       = (&includeHandler);
-
-    #ifdef XSC_ENABLE_LANGUAGE_EXT
     in.extensions           = static_cast<unsigned int>(inputDesc->ExtensionFlags);
-    #endif
 
     /* Copy output descriptor */
     Xsc::ShaderOutput out;

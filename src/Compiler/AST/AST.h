@@ -567,7 +567,7 @@ struct BufferDecl : public Decl
     FLAG_ENUM
     {
         FLAG( isUsedForCompare,     2 ), // This buffer is used in a texture compare operation.
-        FLAG( isUsedForImageRead,   3 )  // This is a buffer used in an image load or image atomic operation.
+        FLAG( isUsedForImageRead,   3 ), // This is a buffer used in an image load or image atomic operation.
     };
 
     TypeDenoterPtr DeriveTypeDenoter(const TypeDenoter* expectedTypeDenoter) override;
@@ -1131,7 +1131,7 @@ struct CallExpr : public Expr
     {
         // If this function call is an intrinsic, it's wrapper function can be inlined (i.e. no wrapper function must be generated)
         // e.g. "clip(a), clip(b);" can not be inlined, due to the list expression.
-        FLAG( canInlineIntrinsicWrapper, 1 ),
+        FLAG( canInlineIntrinsicWrapper, 0 ),
     };
 
     TypeDenoterPtr DeriveTypeDenoter(const TypeDenoter* expectedTypeDenoter) override;

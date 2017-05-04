@@ -12,6 +12,7 @@
 #include "Analyzer.h"
 #include "ShaderVersion.h"
 #include "Variant.h"
+#include "Flags.h"
 #include <map>
 #include <set>
 
@@ -34,6 +35,7 @@ class HLSLAnalyzer : public Analyzer
         
         using OnOverrideProc = ASTSymbolTable::OnOverrideProc;
         using OnValidAttributeValueProc = std::function<bool(const AttributeValue)>;
+        using OnAssignTypeDenoterProc = std::function<void(const TypeDenoterPtr&)>;
 
         /* === Structures === */
 
@@ -60,6 +62,7 @@ class HLSLAnalyzer : public Analyzer
 
         DECL_VISIT_PROC( Program           );
         DECL_VISIT_PROC( CodeBlock         );
+        DECL_VISIT_PROC( Attribute         );
         DECL_VISIT_PROC( ArrayDimension    );
         DECL_VISIT_PROC( TypeSpecifier     );
         
@@ -155,18 +158,19 @@ class HLSLAnalyzer : public Analyzer
 
         /* ----- Attributes ----- */
 
-        bool AnalyzeNumArgsAttribute(Attribute* ast, std::size_t expectedNumArgs, bool required = true);
+        bool AnalyzeNumArgsAttribute(Attribute* attrib, std::size_t minNumArgs, std::size_t maxNumArgs, bool required);
+        bool AnalyzeNumArgsAttribute(Attribute* attrib, std::size_t expectedNumArgs, bool required = true);
         
-        void AnalyzeAttributeDomain(Attribute* ast, bool required = true);
-        void AnalyzeAttributeOutputTopology(Attribute* ast, bool required = true);
-        void AnalyzeAttributePartitioning(Attribute* ast, bool required = true);
-        void AnalyzeAttributeOutputControlPoints(Attribute* ast);
-        void AnalyzeAttributePatchConstantFunc(Attribute* ast);
+        void AnalyzeAttributeDomain(Attribute* attrib, bool required = true);
+        void AnalyzeAttributeOutputTopology(Attribute* attrib, bool required = true);
+        void AnalyzeAttributePartitioning(Attribute* attrib, bool required = true);
+        void AnalyzeAttributeOutputControlPoints(Attribute* attrib);
+        void AnalyzeAttributePatchConstantFunc(Attribute* attrib);
 
-        void AnalyzeAttributeMaxVertexCount(Attribute* ast);
+        void AnalyzeAttributeMaxVertexCount(Attribute* attrib);
 
-        void AnalyzeAttributeNumThreads(Attribute* ast);
-        void AnalyzeAttributeNumThreadsArgument(Expr* ast, unsigned int& value);
+        void AnalyzeAttributeNumThreads(Attribute* attrib);
+        void AnalyzeAttributeNumThreadsArgument(Expr* expr, unsigned int& value);
 
         void AnalyzeAttributeValue(
             Expr* argExpr,
@@ -183,12 +187,6 @@ class HLSLAnalyzer : public Analyzer
             std::string& literalValue
         );
 
-        #ifdef XSC_ENABLE_LANGUAGE_EXT
-
-        void AnalyzeAttributeLayout(Attribute* attrib, BufferDeclStmnt& bufferDeclStmnt);
-
-        #endif
-
         /* ----- Semantic ----- */
 
         void AnalyzeSemantic(IndexedSemantic& semantic);
@@ -196,6 +194,26 @@ class HLSLAnalyzer : public Analyzer
         void AnalyzeSemanticSM3Remaining();
         void AnalyzeSemanticVarDecl(IndexedSemantic& semantic, VarDecl* varDecl);
         void AnalyzeSemanticFunctionReturn(IndexedSemantic& semantic);
+
+        /* ----- Language extensions ----- */
+
+        #ifdef XSC_ENABLE_LANGUAGE_EXT
+        
+        void AnalyzeExtAttributes(std::vector<AttributePtr>& attribs, const TypeDenoterPtr& typeDen);
+
+        void AnalyzeAttributeLayout(Attribute* attrib, const TypeDenoterPtr& typeDen);
+
+        void AnalyzeAttributeSpace(Attribute* attrib, const TypeDenoterPtr& typeDen);
+        bool AnalyzeAttributeSpaceIdent(Attribute* attrib, std::size_t argIndex, std::string& ident);
+
+        void AnalyzeVectorSpaceAssign(
+            TypedAST* lhs,
+            const TypeDenoter& rhsTypeDen,
+            const OnAssignTypeDenoterProc& assignTypeDenProc = nullptr,
+            bool swapAssignOrder = false
+        );
+
+        #endif
 
         /* ----- Misc ----- */
 
@@ -219,7 +237,9 @@ class HLSLAnalyzer : public Analyzer
         std::set<VarDecl*>  varDeclSM3Semantics_;
 
         #ifdef XSC_ENABLE_LANGUAGE_EXT
-        int                 extensions_                 = 0;
+        
+        Flags               extensions_;
+
         #endif
 
 };

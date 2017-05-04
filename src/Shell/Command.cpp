@@ -39,6 +39,14 @@ T MapStringToType(const std::string& search, const std::map<std::string, T>& map
     return it->second;
 }
 
+static void SetFlagsByBoolean(CommandLine& cmdLine, unsigned int& flagsOut, unsigned int flags)
+{
+    if (cmdLine.AcceptBoolean(true))
+        flagsOut |= flags;
+    else
+        flagsOut &= (~flags);
+}
+
 
 /*
  * Command class
@@ -191,8 +199,8 @@ HelpDescriptor VersionOutCommand::Help() const
         "-Vout, --version-out VERSION",
         "Shader output version; default=GLSL; valid versions:",
         (
-            "GLSL[110, 120, 130, 140, 150, 330, 400, 410, 420, 430, 440, 450],\n" \
-            "ESSL[100, 300, 310, 320],\n" \
+            "GLSL[110, 120, 130, 140, 150, 330, 400, 410, 420, 430, 440, 450],\n"   \
+            "ESSL[100, 300, 310, 320],\n"                                           \
             "VKSL[450]"
         ),
         HelpCategory::Main
@@ -333,10 +341,7 @@ void WarnCommand::Run(CommandLine& cmdLine, ShellState& state)
         "invalid warning type"
     );
 
-    if (cmdLine.AcceptBoolean(true))
-        state.inputDesc.warnings |= flags;
-    else
-        state.inputDesc.warnings &= (~flags);
+    SetFlagsByBoolean(cmdLine, state.inputDesc.warnings, flags);
 }
 
 
@@ -745,10 +750,38 @@ HelpDescriptor VersionCommand::Help() const
 
 void VersionCommand::Run(CommandLine& cmdLine, ShellState& state)
 {
+    /* Print version info in highlighted color */
     ConsoleManip::ScopedColor highlight(ConsoleManip::ColorFlags::Green | ConsoleManip::ColorFlags::Blue);
-    std::cout << "XShaderCompiler ( Version " << XSC_VERSION_STRING << " )" << std::endl;
+
+    /* Print version */
+    std::cout << "XShaderCompiler ( ";
+    {
+        ConsoleManip::ScopedColor highlight(ConsoleManip::ColorFlags::Green | ConsoleManip::ColorFlags::Blue | ConsoleManip::ColorFlags::Intens);
+        std::cout << "Version " << XSC_VERSION_STRING;
+    }
+    
+    #ifdef XSC_ENABLE_LANGUAGE_EXT
+    std::cout << "; ";
+    {
+        ConsoleManip::ScopedColor highlight(ConsoleManip::ColorFlags::Green | ConsoleManip::ColorFlags::Blue | ConsoleManip::ColorFlags::Intens);
+        std::cout << "Ext";
+    }
+    #endif
+    
+    #ifdef _DEBUG
+    std::cout << "; ";
+    {
+        ConsoleManip::ScopedColor highlight(ConsoleManip::ColorFlags::Green | ConsoleManip::ColorFlags::Blue | ConsoleManip::ColorFlags::Intens);
+        std::cout << "DEBUG";
+    }
+    #endif
+
+    std::cout << " )" << std::endl;
+    
+    /* Print copyright and license notice */
     std::cout << "Copyright (c) 2014-2017 by Lukas Hermanns" << std::endl;
     std::cout << "3-Clause BSD License" << std::endl;
+
     state.actionPerformed = true;
 }
 
@@ -1322,18 +1355,19 @@ void SeparateSamplersCommand::Run(CommandLine& cmdLine, ShellState& state)
 
 std::vector<Command::Identifier> LanguageExtensionCommand::Idents() const
 {
-    return { { "-E", true } };
+    return { { "-X", true } };
 }
 
 HelpDescriptor LanguageExtensionCommand::Help() const
 {
     return
     {
-        "-E<TYPE> [" + CommandLine::GetBooleanOption() + "]",
+        "-X<TYPE> [" + CommandLine::GetBooleanOption() + "]",
         "Enables/disables the specified language extension; default=" + CommandLine::GetBooleanFalse() + "; value types:",
         (
-            "all           => enables all extensions\n"                                                         \
-            "attr-layout   => allows the use of 'layout' attribute in order to specify image layout formats"
+            "all         => all kinds of extensions\n"                                  \
+            "attr-layout => enable 'layout' attribute to specify image layout format\n" \
+            "attr-space  => enable 'space' attribute for a stronger type system"
         )
     };
 }
@@ -1343,20 +1377,19 @@ void LanguageExtensionCommand::Run(CommandLine& cmdLine, ShellState& state)
     const auto flags = MapStringToType<unsigned int>(
         cmdLine.Accept(),
         {
-            { "all",           Extensions::All },
-            { "attr-layout",   Extensions::LayoutAttribute },
+            { "all",         Extensions::All             },
+            { "attr-layout", Extensions::LayoutAttribute },
+            { "attr-space",  Extensions::SpaceAttribute  },
         },
         "invalid extension type"
-        );
+    );
 
-    if (cmdLine.AcceptBoolean(true))
-        state.inputDesc.extensions |= flags;
-    else
-        state.inputDesc.extensions &= (~flags);
+    SetFlagsByBoolean(cmdLine, state.inputDesc.extensions, flags);
 }
 
-
 #endif
+
+
 } // /namespace Util
 
 } // /namespace Xsc

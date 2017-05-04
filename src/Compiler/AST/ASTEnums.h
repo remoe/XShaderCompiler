@@ -495,7 +495,7 @@ SamplerType SamplerTypeToShadowSamplerType(const SamplerType t);
 
 /* ----- ImageLayoutFormat Enum ----- */
 
-// Image layout format enumeration
+// Image layout format enumeration.
 enum class ImageLayoutFormat
 {
     Undefined,
@@ -585,6 +585,7 @@ enum class AttributeType
 {
     Undefined,
 
+    /* --- Common attributes --- */
     Branch,
     Call,
     Flatten,
@@ -605,6 +606,7 @@ enum class AttributeType
     Unused,
     Xps,
 
+    /* --- Tessellation attributes --- */
     Domain,
     EarlyDepthStencil,
     Instance,
@@ -620,6 +622,7 @@ enum class AttributeType
     #ifdef XSC_ENABLE_LANGUAGE_EXT
 
     /* --- Language extensions --- */
+    Space,
     Layout,
 
     #endif
