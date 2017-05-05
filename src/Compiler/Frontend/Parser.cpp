@@ -8,6 +8,7 @@
 #include "Parser.h"
 #include "ReportIdents.h"
 #include "AST.h"
+#include "Exception.h"
 #include <algorithm>
 
 
@@ -25,8 +26,8 @@ Parser::~Parser()
  */
 
 Parser::Parser(Log* log) :
-    reportHandler_ { R_Syntax, log },
-    log_           { log           }
+    reportHandler_ { log },
+    log_           { log }
 {
 }
 
@@ -40,7 +41,9 @@ static SourceArea GetTokenArea(const Token* tkn)
 void Parser::Error(const std::string& msg, const SourceArea& area, bool breakWithExpection)
 {
     /* Report error with the report handler */
-    reportHandler_.Error(breakWithExpection, msg, GetScanner().Source(), area);
+    reportHandler_.SubmitReport(
+        breakWithExpection, Report::Types::Error, R_SyntaxError, msg, GetScanner().Source(), area
+    );
 }
 
 void Parser::Error(const std::string& msg, const Token* tkn, bool breakWithExpection)
@@ -81,12 +84,19 @@ void Parser::ErrorUnexpected(const Tokens type, const Token* tkn, bool breakWith
     if (typeName.empty())
         ErrorUnexpected("", tkn, breakWithExpection);
     else
-        ErrorUnexpected(R_Expected + ": " + typeName, tkn, breakWithExpection);
+        ErrorUnexpected(R_Expected(typeName), tkn, breakWithExpection);
 }
 
 void Parser::ErrorInternal(const std::string& msg, const std::string& procName)
 {
-    reportHandler_.SubmitReport(true, Report::Types::Error, R_InternalError, msg + R_InFunction(procName), nullptr, SourceArea::ignore);
+    reportHandler_.SubmitReport(
+        true,
+        Report::Types::Error,
+        R_InternalError,
+        msg + R_InFunction(procName),
+        nullptr,
+        SourceArea::ignore
+    );
 }
 
 void Parser::Warning(const std::string& msg, const SourceArea& area)
@@ -121,13 +131,13 @@ void Parser::PushScannerSource(const SourceCodePtr& source, const std::string& f
     /* Make a new token scanner */
     auto scanner = MakeScanner();
     if (!scanner)
-        throw std::runtime_error(R_FailedToCreateScanner);
+        RuntimeErr(R_FailedToCreateScanner);
 
     scannerStack_.push({ scanner, filename, nullptr });
 
     /* Start scanning */
     if (!scanner->ScanSource(source))
-        throw std::runtime_error(R_FailedToScanSource);
+        RuntimeErr(R_FailedToScanSource);
 
     /* Set initial source origin for scanner */
     scanner->Source()->NextSourceOrigin(filename, 0);
@@ -156,7 +166,7 @@ bool Parser::PopScannerSource()
 Scanner& Parser::GetScanner()
 {
     if (scannerStack_.empty())
-        throw std::runtime_error(R_MissingScanner);
+        RuntimeErr(R_MissingScanner);
     return *(scannerStack_.top().scanner);
 }
 
