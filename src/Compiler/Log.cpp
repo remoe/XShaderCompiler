@@ -23,13 +23,13 @@ void StdLog::SumitReport(const Report& report)
 {
     switch (report.Type())
     {
-        case Report::Types::Info:
+        case ReportTypes::Info:
             infos_.push_back({ FullIndent(), report });
             break;
-        case Report::Types::Warning:
+        case ReportTypes::Warning:
             warnings_.push_back({ FullIndent(), report });
             break;
-        case Report::Types::Error:
+        case ReportTypes::Error:
             errors_.push_back({ FullIndent(), report });
             break;
     }
@@ -97,12 +97,12 @@ void StdLog::PrintReport(const IndentReport& r, bool verbose)
     auto type = r.report.Type();
     const auto& msg = r.report.Message();
 
-    if (type == Report::Types::Error)
+    if (type == ReportTypes::Error)
     {
         ConsoleManip::ScopedColor highlight(Colors::Red | Colors::Intens);
         PrintMultiLineString(msg, r.indent);
     }
-    else if (type == Report::Types::Warning)
+    else if (type == ReportTypes::Warning)
     {
         ConsoleManip::ScopedColor highlight(Colors::Yellow);
         PrintMultiLineString(msg, r.indent);
@@ -116,8 +116,8 @@ void StdLog::PrintReport(const IndentReport& r, bool verbose)
     /* Print optional line and line-marker */
     if (r.report.HasLine())
     {
-        const auto& line    = r.report.Line();
-        const auto& marker  = r.report.Marker();
+        const auto& line = r.report.Line();
+        const auto& mark = r.report.Marker();
 
         /* Print line with color highlight for the occurrence */
         {
@@ -125,27 +125,37 @@ void StdLog::PrintReport(const IndentReport& r, bool verbose)
 
             std::cout << r.indent;
 
-            auto pos = std::min(marker.find('^'), marker.find('~'));
-            if (pos != std::string::npos && pos < marker.size())
+            std::size_t start = 0, end = 0;
+
+            while ( end < mark.size() && ( start = mark.find_first_not_of(' ', end) ) != std::string::npos )
             {
-                std::cout << line.substr(0, pos);
+                /* Write unhighlighted text */
+                std::cout << line.substr(end, start - end);
+
+                /* Write highlighted text */
                 {
                     ConsoleManip::ScopedColor highlight(Colors::Cyan);
-                    std::cout << line.substr(pos, marker.size() - pos);
+
+                    end = mark.find(' ', start);
+
+                    if (end == std::string::npos)
+                        end = std::min(line.size(), mark.size());
+
+                    std::cout << line.substr(start, end - start);
                 }
-                if (marker.size() < line.size())
-                    std::cout << line.substr(marker.size());
             }
-            else
-                std::cout << line;
+
+            if (end < line.size())
+                std::cout << line.substr(end);
 
             std::cout << std::endl;
         }
 
         /* Print line marker */
+        if (!mark.empty())
         {
             ConsoleManip::ScopedColor highlight(Colors::Cyan);
-            std::cout << r.indent << marker << std::endl;
+            std::cout << r.indent << mark << std::endl;
         }
     }
 

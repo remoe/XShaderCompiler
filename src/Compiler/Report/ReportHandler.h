@@ -16,6 +16,7 @@
 #include <stack>
 #include <set>
 #include <functional>
+#include <vector>
 
 
 namespace Xsc
@@ -44,11 +45,12 @@ class ReportHandler
 
         void SubmitReport(
             bool breakWithExpection,
-            const Report::Types type,
+            const ReportTypes type,
             const std::string& typeName,
             const std::string& msg,
             SourceCode* sourceCode = nullptr,
-            const SourceArea& area = SourceArea::ignore
+            const SourceArea& area = SourceArea::ignore,
+            const std::vector<SourceArea>& secondaryAreas = {}
         );
 
         // Returns true if any errors have been submitted.
@@ -70,10 +72,11 @@ class ReportHandler
     private:
 
         Report MakeReport(
-            const Report::Types type,
+            const ReportTypes type,
             const std::string& msg,
             SourceCode* sourceCode,
-            const SourceArea& area
+            const SourceArea& area,
+            const std::vector<SourceArea>& secondaryAreas
         );
 
         Log*                        log_                = nullptr;
