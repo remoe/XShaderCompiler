@@ -17,6 +17,7 @@
 #include <ostream>
 
 
+
 namespace Xsc
 {
 
@@ -119,6 +120,48 @@ struct BindingSlot
     int         location;
 };
 
+// BEGIN BANSHEE CHANGES
+
+enum class UniformType
+{
+    Buffer,
+    Sampler,
+    Variable,
+    Struct
+};
+
+//! A single element in a constant buffer 
+struct Uniform
+{
+    enum Flags
+    {
+        None        = 0,
+
+        Internal    = 1 << 0,
+        Color       = 1 << 1
+    };
+
+    //! Identifier of the element.
+    std::string ident;
+
+    //! Data type of the element.
+    UniformType type = UniformType::Variable;
+
+    //! Determines actual type of the element. Contents depend on "type".
+    int baseType = 0;
+
+    //! Index of the uniform block this uniform belongs to. -1 if none.
+    int uniformBlock = -1;
+
+    //! Index into the default value array. -1 if no default value.
+    int defaultValue = -1;
+
+    //! Flags further defining the uniform.
+    Flags flags = None;
+};
+
+// END BANSHEE CHANGES
+
 //! Number of threads within each work group of a compute shader.
 struct NumThreads
 {
@@ -158,6 +201,10 @@ struct ReflectionData
 
     //! 'numthreads' attribute of a compute shader.
     NumThreads                          numThreads;
+
+    // BEGIN BANSHEE CHANGES
+    std::vector<Uniform>                uniforms;
+    // END BANSHEE CHANGES
 };
 
 

@@ -123,6 +123,17 @@ IMPLEMENT_VISIT_PROC(SamplerDecl)
             ReflectSamplerValue(value.get(), samplerState);
     }
     data_->samplerStates[ast->ident] = samplerState;
+
+    // BEGIN BANSHEE CHANGES
+
+    Reflection::Uniform uniform;
+    uniform.ident = ast->ident;
+    uniform.type = Reflection::UniformType::Sampler;
+    uniform.baseType = (int)SamplerType::SamplerState;
+
+    data_->uniforms.push_back(uniform);
+
+    // END BANSHEE CHANGES
 }
 
 /* --- Declaration statements --- */
@@ -141,6 +152,46 @@ IMPLEMENT_VISIT_PROC(UniformBufferDecl)
     {
         /* Reflect constant buffer binding */
         data_->constantBuffers.push_back({ ast->ident, GetBindingPoint(ast->slotRegisters) });
+
+        // BEGIN BANSHEE CHANGES
+
+        Reflection::Uniform uniform;
+        uniform.ident = ast->ident;
+        uniform.type = Reflection::UniformType::Buffer;
+        uniform.baseType = (int)ast->bufferType;
+
+        data_->uniforms.push_back(uniform);
+
+        for(auto& stmt : ast->varMembers)
+        {
+            Reflection::UniformType type;
+            DataType baseType = DataType::Undefined;
+
+            if (stmt->typeSpecifier->structDecl)
+                type = Reflection::UniformType::Struct;
+            else
+            {
+                type = Reflection::UniformType::Variable;
+
+                if (auto baseTypeDenoter = stmt->typeSpecifier->typeDenoter->As<BaseTypeDenoter>())
+                    baseType = baseTypeDenoter->dataType;
+            }
+            
+            int blockIdx = (int)data_->constantBuffers.size() - 1;
+
+            for(auto& decl : stmt->varDecls)
+            {
+                Reflection::Uniform uniform;
+                uniform.ident = decl->ident;
+                uniform.type = type;
+                uniform.baseType = (int)baseType;
+                uniform.uniformBlock = blockIdx;
+                
+                data_->uniforms.push_back(uniform);
+            }
+        }
+
+        // END BANSHEE CHANGES
     }
 }
 
@@ -163,6 +214,17 @@ IMPLEMENT_VISIT_PROC(BufferDeclStmnt)
                     data_->textures.push_back(bindingSlot);
                 else
                     data_->storageBuffers.push_back(bindingSlot);
+
+                // BEGIN BANSHEE CHANGES
+
+                Reflection::Uniform uniform;
+                uniform.ident = bufferDecl->ident;
+                uniform.type = Reflection::UniformType::Buffer;
+                uniform.baseType = (int)ast->typeDenoter->bufferType;
+
+                data_->uniforms.push_back(uniform);
+
+                // END BANSHEE CHANGES
             }
         }
     }
