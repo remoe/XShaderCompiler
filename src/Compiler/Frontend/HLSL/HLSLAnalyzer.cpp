@@ -192,6 +192,26 @@ IMPLEMENT_VISIT_PROC(BufferDecl)
     /* Register identifier for buffer */
     Register(ast->ident, ast);
     Visit(ast->arrayDims);
+
+    // BEGIN BANSHEE CHANGES
+    if(ast->initializer)
+    {
+        if(auto objExpr = ast->initializer->As<ObjectExpr>())
+        {
+            const auto& defaultTex = objExpr->ident;
+            auto defaultTexHandle = ExtHLSLKeywordToDefaultTexture(defaultTex);
+            if (defaultTexHandle != DefaultTexture::Undefined)
+            {
+                ast->defaultValue.available = true;
+                ast->defaultValue.handle = defaultTexHandle;
+            }
+            else
+                Error(R_InvalidTextureInitializerValue(defaultTex, ast->ident), ast);
+        }
+        else
+            Error(R_ExpectedIdentInInitializer(ast->ident), ast);
+    }
+    // END BANSHEE CHANGES
 }
 
 IMPLEMENT_VISIT_PROC(SamplerDecl)
@@ -731,6 +751,87 @@ void HLSLAnalyzer::AnalyzeVarDeclLocal(VarDecl* varDecl, bool registerVarIdent)
 
         if (varDecl->structDeclRef)
             Error(R_MemberVarsCantHaveDefaultValues(varDecl->ToString()), varDecl->initializer.get());
+
+        // BEGIN BANSHEE CHANGES
+
+        auto baseTypeDen = varDecl->GetTypeDenoter()->As<BaseTypeDenoter>();
+        if (baseTypeDen->IsScalar())
+        {
+            if (auto literalExpr = varDecl->initializer->As<LiteralExpr>())
+            {
+                auto variant = Variant::ParseFrom(literalExpr->value);
+
+                switch (literalExpr->dataType)
+                {
+                case DataType::Bool:
+                    varDecl->defaultValue.boolean = variant.Bool();
+                    varDecl->defaultValue.available = true;
+                    break;
+                case DataType::Int:
+                    varDecl->defaultValue.integer = (int)variant.Int();
+                    varDecl->defaultValue.available = true;
+                    break;
+                case DataType::UInt:
+                    varDecl->defaultValue.integer = (int)variant.Int();
+                    varDecl->defaultValue.available = true;
+                    break;
+                case DataType::Half:
+                case DataType::Float:
+                case DataType::Double:
+                    varDecl->defaultValue.real = (float)variant.Real();
+                    varDecl->defaultValue.available = true;
+                    break;
+                default:
+                    break;
+                }
+            }
+        }
+        else
+        {
+            if (auto initExpr = varDecl->initializer->As<InitializerExpr>())
+            {
+                int numElements = 0;
+                if (baseTypeDen->IsVector())
+                    numElements = VectorTypeDim(baseTypeDen->dataType);
+                else if (baseTypeDen->IsMatrix())
+                {
+                    auto dims = MatrixTypeDim(baseTypeDen->dataType);
+                    numElements = dims.first * dims.second;
+                }
+
+                if (numElements == (int)initExpr->exprs.size())
+                {
+                    for (int i = 0; i < numElements; i++)
+                    {
+                        if (auto literalExpr = initExpr->exprs[i]->As<LiteralExpr>())
+                        {
+                            auto variant = Variant::ParseFrom(literalExpr->value);
+
+                            switch (literalExpr->dataType)
+                            {
+                            case DataType::Bool:
+                                variant.ToInt();
+                            case DataType::Int:
+                            case DataType::UInt:
+                                varDecl->defaultValue.imatrix[i] = (int)variant.Int();
+                                break;
+                            case DataType::Half:
+                            case DataType::Float:
+                            case DataType::Double:
+                                varDecl->defaultValue.matrix[i] = (float)variant.Real();
+                                break;
+                            default:
+                                break;
+                            }
+                        }
+                    }
+
+                    varDecl->defaultValue.available = true;
+                }
+            }
+        }
+
+        // END BANSHEE CHANGES
     }
 }
 
@@ -2331,10 +2432,6 @@ void HLSLAnalyzer::AnalyzeExtAttributes(std::vector<AttributePtr>& attribs, cons
                 AnalyzeAttributeModifier(attrib.get(), typeDen);
             break;
 
-            case AttributeType::Default:
-                AnalyzeAttributeDefault(attrib.get(), typeDen);
-            break;
-
             // END BANSHEE CHANGES
 
             default:
@@ -2496,139 +2593,6 @@ void HLSLAnalyzer::AnalyzeAttributeModifier(Attribute* attrib, const TypeDenoter
                 baseTypeDen->extModifiers |= ExtModifiers::Color;
             else if (attrib->attributeType == AttributeType::Internal)
                 baseTypeDen->extModifiers |= ExtModifiers::Internal;
-        }
-    }
-}
-
-static std::map<std::string, int> GenerateDefaultTextureMap()
-{
-    using T = DefaultTexture;
-
-    return
-    {
-        { "white",        T::White },
-        { "black",        T::Black },
-        { "normal",       T::Normal },
-    };
-}
-
-int ExtHLSLKeywordToDefaultTexture(const std::string& keyword)
-{
-    static const auto typeMap = GenerateDefaultTextureMap();
-    auto it = typeMap.find(keyword);
-    return (it != typeMap.end() ? it->second : DefaultTexture::Undefined);
-}
-
-void HLSLAnalyzer::AnalyzeAttributeDefault(Attribute* attrib, const TypeDenoterPtr& typeDen)
-{
-    if (AnalyzeNumArgsAttribute(attrib, 1, true))
-    {
-        if (auto bufferTypeDen = typeDen->As<BufferTypeDenoter>())
-        {
-            auto expr = attrib->arguments[0].get();
-            if (auto objectExpr = expr->As<ObjectExpr>())
-            {
-                const auto& textureName = objectExpr->ident;
-                auto textureHandle = ExtHLSLKeywordToDefaultTexture(textureName);
-                if (textureHandle != DefaultTexture::Undefined)
-                {
-                    bufferTypeDen->defaultValue.handle = textureHandle;
-                    bufferTypeDen->defaultValue.available = true;
-                }
-                else
-                    Error(R_InvalidIdentArgInAttribute(textureName, "default"));
-            }
-            else
-                Error(R_ExpectedIdentArgInAttribute("default"), expr);
-        }
-        else if (auto baseTypeDen = typeDen->As<BaseTypeDenoter>())
-        {
-            auto expr = attrib->arguments[0].get();
-            if(baseTypeDen->IsScalar())
-            {
-                if (auto literalExpr = expr->As<LiteralExpr>())
-                {
-                    auto variant = Variant::ParseFrom(literalExpr->value);
-
-                    switch (literalExpr->dataType)
-                    {
-                    case DataType::Bool:
-                        baseTypeDen->defaultValue.boolean = variant.Bool();
-                        baseTypeDen->defaultValue.available = true;
-                        break;
-                    case DataType::Int:
-                        baseTypeDen->defaultValue.integer = (int)variant.Int();
-                        baseTypeDen->defaultValue.available = true;
-                        break;
-                    case DataType::UInt:
-                        baseTypeDen->defaultValue.integer = (int)variant.Int();
-                        baseTypeDen->defaultValue.available = true;
-                        break;
-                    case DataType::Half:
-                    case DataType::Float:
-                    case DataType::Double:
-                        baseTypeDen->defaultValue.real = (float)variant.Real();
-                        baseTypeDen->defaultValue.available = true;
-                        break;
-                    default:
-                        Error(R_ExpectedLiteralArgInAttribute("default"), expr);
-                        break;
-                    }
-                }
-                else
-                    Error(R_ExpectedLiteralArgInAttribute("default"), expr);
-            }
-            else
-            {
-                if (auto initExpr = expr->As<InitializerExpr>())
-                {
-                    int numElements = 0;
-                    if (baseTypeDen->IsVector())
-                        numElements = VectorTypeDim(baseTypeDen->dataType);
-                    else if(baseTypeDen->IsMatrix())
-                    {
-                        auto dims = MatrixTypeDim(baseTypeDen->dataType);
-                        numElements = dims.first * dims.second;
-                    }
-
-                    if(numElements == (int)initExpr->exprs.size())
-                    {
-                        for(int i = 0; i < numElements; i++)
-                        {
-                            if (auto literalExpr = initExpr->exprs[i]->As<LiteralExpr>())
-                            {
-                                auto variant = Variant::ParseFrom(literalExpr->value);
-
-                                switch (literalExpr->dataType)
-                                {
-                                case DataType::Bool:
-                                    variant.ToInt();
-                                case DataType::Int:
-                                case DataType::UInt:
-                                    baseTypeDen->defaultValue.imatrix[i] = (int)variant.Int();
-                                    break;
-                                case DataType::Half:
-                                case DataType::Float:
-                                case DataType::Double:
-                                    baseTypeDen->defaultValue.matrix[i] = (float)variant.Real();
-                                    break;
-                                default:
-                                    Error(R_ExpectedLiteralArgInAttribute("default"), expr);
-                                    break;
-                                }
-                            }
-                            else
-                                Error(R_ExpectedLiteralArgInAttribute("default"), expr);
-                        }
-
-                        baseTypeDen->defaultValue.available = true;
-                    }
-                    else
-                        Error(R_ExpectedNumElemsInInitializerArg(numElements, "default"), expr);
-                }
-                else
-                    Error(R_ExpectedInitializerArgInAttribute("default"), expr);
-            }
         }
     }
 }

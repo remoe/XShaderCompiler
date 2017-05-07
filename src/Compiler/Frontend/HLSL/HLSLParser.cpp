@@ -606,6 +606,13 @@ BufferDeclPtr HLSLParser::ParseBufferDecl(BufferDeclStmnt* declStmntRef, const T
     ast->slotRegisters  = ParseRegisterList();
     ast->annotations    = ParseAnnotationList();
 
+    // BEGIN BANSHEE CHANGES
+    /* Parse optional initializer expression */
+    if (Is(Tokens::AssignOp, "="))
+        ast->initializer = ParseInitializer();
+
+    // END BANSHEE CHANGES
+
     return ast;
 }
 

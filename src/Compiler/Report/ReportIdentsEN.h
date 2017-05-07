@@ -504,9 +504,8 @@ DECL_REPORT( ExpectedIdentInSpaceAttr,          "expected identifier as argument
 
 // BEGIN BANSHEE CHANGES
 
-DECL_REPORT(ExpectedLiteralArgInAttribute, "expected literal as argument for attribute[ '{0}']");
-DECL_REPORT(ExpectedInitializerArgInAttribute, "expected initializer as argument for attribute[ '{0}']");
-DECL_REPORT(ExpectedNumElemsInInitializerArg, "expected '{0}' elements in attribute '{1}' argument initializer");
+DECL_REPORT( ExpectedIdentInInitializer,        "expected identifier as initializer for object '{0}'");
+DECL_REPORT( InvalidTextureInitializerValue,    "invalid value '{0}' provided as initializer for texture '{1}'");
 
 // END BANSHEE CHANGES
 

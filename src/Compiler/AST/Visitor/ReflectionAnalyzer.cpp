@@ -202,10 +202,10 @@ IMPLEMENT_VISIT_PROC(UniformBufferDecl)
                     if ((baseTypeDenoter->extModifiers & ExtModifiers::Color) != 0)
                         uniform.flags |= Reflection::Uniform::Flags::Color;
 
-                    if(baseTypeDenoter->defaultValue.available)
+                    if(decl->defaultValue.available)
                     {
                         Reflection::DefaultValue defaultValue;
-                        memcpy(&defaultValue, &baseTypeDenoter->defaultValue.matrix, sizeof(defaultValue));
+                        memcpy(&defaultValue, &decl->defaultValue.matrix, sizeof(defaultValue));
 
                         uniform.defaultValue = (int)data_->defaultValues.size();
                         data_->defaultValues.push_back(defaultValue);
@@ -257,11 +257,12 @@ IMPLEMENT_VISIT_PROC(BufferDeclStmnt)
                 if ((ast->typeDenoter->extModifiers & ExtModifiers::Color) != 0)
                     uniform.flags |= Reflection::Uniform::Flags::Color;
 
-                if (ast->typeDenoter->defaultValue.available)
+                if (bufferDecl->defaultValue.available)
                 {
                     Reflection::DefaultValue defaultValue;
-                    defaultValue.handle = ast->typeDenoter->defaultValue.handle;
+                    defaultValue.handle = bufferDecl->defaultValue.handle;
 
+                    uniform.defaultValue = (int)data_->defaultValues.size();
                     data_->defaultValues.push_back(defaultValue);
                 }
 

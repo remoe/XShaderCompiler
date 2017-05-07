@@ -214,7 +214,6 @@ class HLSLAnalyzer : public Analyzer
         );
 
         void AnalyzeAttributeModifier(Attribute* attrib, const TypeDenoterPtr& typeDen);
-        void AnalyzeAttributeDefault(Attribute* attrib, const TypeDenoterPtr& typeDen);
 
         #endif
 

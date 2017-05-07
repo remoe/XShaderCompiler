@@ -87,18 +87,6 @@ struct ExtModifiers
     };
 };
 
-struct DefaultTexture
-{
-    enum Type
-    {
-        Undefined,
-
-        White,
-        Black,
-        Normal
-    };
-};
-
 struct DefaultValue
 {
     bool available = false;
@@ -294,10 +282,7 @@ struct BaseTypeDenoter : public TypeDenoter
     VectorSpace vectorSpace;                        // Vector space of this type denoter.
 
     // BEGIN BANSHEE CHANGES
-
     int             extModifiers = 0;
-    DefaultValue    defaultValue;
-
     // END BANSHEE CHANGES
     #endif
 };
@@ -342,10 +327,7 @@ struct BufferTypeDenoter : public TypeDenoter
     ImageLayoutFormat   layoutFormat        = ImageLayoutFormat::Undefined;
 
     // BEGIN BANSHEE CHANGES
-
     int                 extModifiers        = 0;
-    DefaultValue        defaultValue;
-
     // END BANSHEE CHANGES
     #endif
 };
