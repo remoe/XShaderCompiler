@@ -807,6 +807,10 @@ struct UniformBufferDecl : public Stmnt
     std::vector<StmntPtr>           localStmnts;                                    // Local declaration statements
 
     std::vector<VarDeclStmntPtr>    varMembers;                                     // List of all member variable declaration statements.
+
+    // BEGIN BANSHEE CHANGES
+    int             extModifiers = 0;
+    // END BANSHEE CHANGES
 };
 
 // Buffer (and texture) declaration.

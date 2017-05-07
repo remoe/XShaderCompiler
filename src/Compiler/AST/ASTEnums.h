@@ -624,6 +624,9 @@ enum class AttributeType
     /* --- Language extensions --- */
     Space,
     Layout,
+    Color,
+    Internal,
+    Default
 
     #endif
 };

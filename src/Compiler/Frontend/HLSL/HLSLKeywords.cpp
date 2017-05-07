@@ -909,6 +909,13 @@ static std::map<std::string, AttributeType> GenerateAttributeTypeMap()
         #ifdef XSC_ENABLE_LANGUAGE_EXT
         { "space",                     T::Space                     },
         { "layout",                    T::Layout                    },
+
+        // BEGIN BANSHEE CHANGES
+        { "color",                     T::Color },
+        { "internal",                  T::Internal },
+        { "defval",                    T::Default }
+
+        // END BANSHEE CHANGES
         #endif
     };
 }

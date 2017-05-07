@@ -213,6 +213,9 @@ class HLSLAnalyzer : public Analyzer
             bool swapAssignOrder = false
         );
 
+        void AnalyzeAttributeModifier(Attribute* attrib, const TypeDenoterPtr& typeDen);
+        void AnalyzeAttributeDefault(Attribute* attrib, const TypeDenoterPtr& typeDen);
+
         #endif
 
         /* ----- Misc ----- */

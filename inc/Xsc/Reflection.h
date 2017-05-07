@@ -130,6 +130,16 @@ enum class UniformType
     Struct
 };
 
+union DefaultValue
+{
+    bool boolean;
+    float real;
+    int integer;
+    int imatrix[4];
+    float matrix[16];
+    int handle;
+};
+
 //! A single element in a constant buffer 
 struct Uniform
 {
@@ -157,7 +167,7 @@ struct Uniform
     int defaultValue = -1;
 
     //! Flags further defining the uniform.
-    Flags flags = None;
+    int flags = None;
 };
 
 // END BANSHEE CHANGES
@@ -204,6 +214,7 @@ struct ReflectionData
 
     // BEGIN BANSHEE CHANGES
     std::vector<Uniform>                uniforms;
+    std::vector<DefaultValue>           defaultValues;
     // END BANSHEE CHANGES
 };
 

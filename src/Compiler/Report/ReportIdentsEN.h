@@ -502,6 +502,14 @@ DECL_REPORT( IllegalVectorSpaceAssignment,      "illegal assignment of '{0}' vec
 DECL_REPORT( InconsistVectorSpacesInTypes,      "inconsistent vector-spaces between type denoters[ (found '{0}' and '{1}')]"                                    );
 DECL_REPORT( ExpectedIdentInSpaceAttr,          "expected identifier as argument in 'space' attribute"                                                          );
 
+// BEGIN BANSHEE CHANGES
+
+DECL_REPORT(ExpectedLiteralArgInAttribute, "expected literal as argument for attribute[ '{0}']");
+DECL_REPORT(ExpectedInitializerArgInAttribute, "expected initializer as argument for attribute[ '{0}']");
+DECL_REPORT(ExpectedNumElemsInInitializerArg, "expected '{0}' elements in attribute '{1}' argument initializer");
+
+// END BANSHEE CHANGES
+
 #endif
 
 

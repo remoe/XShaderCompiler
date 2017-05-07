@@ -77,6 +77,45 @@ struct VectorSpace
 bool operator == (const VectorSpace& lhs, const VectorSpace& rhs);
 bool operator != (const VectorSpace& lhs, const VectorSpace& rhs);
 
+// BEGIN BANSHEE CHANGES
+struct ExtModifiers
+{
+    enum Flags
+    {
+        Color = 1 << 0,
+        Internal = 1 << 1
+    };
+};
+
+struct DefaultTexture
+{
+    enum Type
+    {
+        Undefined,
+
+        White,
+        Black,
+        Normal
+    };
+};
+
+struct DefaultValue
+{
+    bool available = false;
+
+    union
+    {
+        bool boolean;
+        float real;
+        int integer;
+        int imatrix[4];
+        float matrix[16];
+        int handle;
+    };
+};
+
+// END BANSHEE CHANGES
+
 #endif
 
 
@@ -253,6 +292,13 @@ struct BaseTypeDenoter : public TypeDenoter
 
     #ifdef XSC_ENABLE_LANGUAGE_EXT
     VectorSpace vectorSpace;                        // Vector space of this type denoter.
+
+    // BEGIN BANSHEE CHANGES
+
+    int             extModifiers = 0;
+    DefaultValue    defaultValue;
+
+    // END BANSHEE CHANGES
     #endif
 };
 
@@ -294,6 +340,13 @@ struct BufferTypeDenoter : public TypeDenoter
 
     #ifdef XSC_ENABLE_LANGUAGE_EXT
     ImageLayoutFormat   layoutFormat        = ImageLayoutFormat::Undefined;
+
+    // BEGIN BANSHEE CHANGES
+
+    int                 extModifiers        = 0;
+    DefaultValue        defaultValue;
+
+    // END BANSHEE CHANGES
     #endif
 };
 

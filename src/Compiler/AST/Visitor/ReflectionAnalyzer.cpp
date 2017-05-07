@@ -148,7 +148,9 @@ IMPLEMENT_VISIT_PROC(FunctionDecl)
 
 IMPLEMENT_VISIT_PROC(UniformBufferDecl)
 {
-    if (ast->flags(AST::isReachable))
+    // BEGIN BANSHEE CHANGES
+    //if (ast->flags(AST::isReachable))
+    // END BANSHEE CHANGES
     {
         /* Reflect constant buffer binding */
         data_->constantBuffers.push_back({ ast->ident, GetBindingPoint(ast->slotRegisters) });
@@ -160,6 +162,9 @@ IMPLEMENT_VISIT_PROC(UniformBufferDecl)
         uniform.type = Reflection::UniformType::Buffer;
         uniform.baseType = (int)ast->bufferType;
 
+        if ((ast->extModifiers & ExtModifiers::Internal) != 0)
+            uniform.flags = Reflection::Uniform::Flags::Internal;
+
         data_->uniforms.push_back(uniform);
 
         for(auto& stmt : ast->varMembers)
@@ -167,13 +172,14 @@ IMPLEMENT_VISIT_PROC(UniformBufferDecl)
             Reflection::UniformType type;
             DataType baseType = DataType::Undefined;
 
+            BaseTypeDenoter* baseTypeDenoter = nullptr;
             if (stmt->typeSpecifier->structDecl)
                 type = Reflection::UniformType::Struct;
             else
             {
                 type = Reflection::UniformType::Variable;
 
-                if (auto baseTypeDenoter = stmt->typeSpecifier->typeDenoter->As<BaseTypeDenoter>())
+                if (baseTypeDenoter = stmt->typeSpecifier->typeDenoter->As<BaseTypeDenoter>())
                     baseType = baseTypeDenoter->dataType;
             }
             
@@ -186,7 +192,26 @@ IMPLEMENT_VISIT_PROC(UniformBufferDecl)
                 uniform.type = type;
                 uniform.baseType = (int)baseType;
                 uniform.uniformBlock = blockIdx;
-                
+                uniform.flags = 0;
+
+                if(baseTypeDenoter != nullptr)
+                {
+                    if ((baseTypeDenoter->extModifiers & ExtModifiers::Internal) != 0)
+                        uniform.flags |= Reflection::Uniform::Flags::Internal;
+
+                    if ((baseTypeDenoter->extModifiers & ExtModifiers::Color) != 0)
+                        uniform.flags |= Reflection::Uniform::Flags::Color;
+
+                    if(baseTypeDenoter->defaultValue.available)
+                    {
+                        Reflection::DefaultValue defaultValue;
+                        memcpy(&defaultValue, &baseTypeDenoter->defaultValue.matrix, sizeof(defaultValue));
+
+                        uniform.defaultValue = (int)data_->defaultValues.size();
+                        data_->defaultValues.push_back(defaultValue);
+                    }
+                }
+
                 data_->uniforms.push_back(uniform);
             }
         }
@@ -197,11 +222,15 @@ IMPLEMENT_VISIT_PROC(UniformBufferDecl)
 
 IMPLEMENT_VISIT_PROC(BufferDeclStmnt)
 {
-    if (ast->flags(AST::isReachable))
+// BEGIN BANSHEE CHANGES
+    //if (ast->flags(AST::isReachable))
+// END BANSHEE CHANGES
     {
         for (auto& bufferDecl : ast->bufferDecls)
         {
-            if (bufferDecl->flags(AST::isReachable))
+            // BEGIN BANSHEE CHANGES
+            //if (bufferDecl->flags(AST::isReachable))
+            // END BANSHEE CHANGES
             {
                 /* Reflect texture or storage-buffer binding */
                 Reflection::BindingSlot bindingSlot;
@@ -221,6 +250,20 @@ IMPLEMENT_VISIT_PROC(BufferDeclStmnt)
                 uniform.ident = bufferDecl->ident;
                 uniform.type = Reflection::UniformType::Buffer;
                 uniform.baseType = (int)ast->typeDenoter->bufferType;
+
+                if ((ast->typeDenoter->extModifiers & ExtModifiers::Internal) != 0)
+                    uniform.flags |= Reflection::Uniform::Flags::Internal;
+
+                if ((ast->typeDenoter->extModifiers & ExtModifiers::Color) != 0)
+                    uniform.flags |= Reflection::Uniform::Flags::Color;
+
+                if (ast->typeDenoter->defaultValue.available)
+                {
+                    Reflection::DefaultValue defaultValue;
+                    defaultValue.handle = ast->typeDenoter->defaultValue.handle;
+
+                    data_->defaultValues.push_back(defaultValue);
+                }
 
                 data_->uniforms.push_back(uniform);
 
