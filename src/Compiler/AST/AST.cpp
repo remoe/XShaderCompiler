@@ -360,7 +360,7 @@ void TypeSpecifier::SetTypeModifier(const TypeModifier modifier)
     typeModifiers.insert(modifier);
 }
 
-bool TypeSpecifier::HasAnyTypeModifierOf(const std::vector<TypeModifier>& modifiers) const
+bool TypeSpecifier::HasAnyTypeModifierOf(const std::initializer_list<TypeModifier>& modifiers) const
 {
     for (auto mod : modifiers)
     {
@@ -370,7 +370,7 @@ bool TypeSpecifier::HasAnyTypeModifierOf(const std::vector<TypeModifier>& modifi
     return false;
 }
 
-bool TypeSpecifier::HasAnyStorageClassesOf(const std::vector<StorageClass>& modifiers) const
+bool TypeSpecifier::HasAnyStorageClassOf(const std::initializer_list<StorageClass>& modifiers) const
 {
     for (auto mod : modifiers)
     {
@@ -483,7 +483,7 @@ VarDecl* VarDecl::FetchStaticVarDefRef() const
 bool VarDecl::IsStatic() const
 {
     if (auto typeSpecifier = FetchTypeSpecifier())
-        return typeSpecifier->HasAnyStorageClassesOf({ StorageClass::Static });
+        return typeSpecifier->HasAnyStorageClassOf({ StorageClass::Static });
     else
         return false;
 }
@@ -726,7 +726,7 @@ std::size_t StructDecl::NumMemberVariables(bool onlyNonStaticMembers) const
 
     for (const auto& member : varMembers)
     {
-        if (!onlyNonStaticMembers || !member->typeSpecifier->HasAnyStorageClassesOf({ StorageClass::Static }))
+        if (!onlyNonStaticMembers || !member->typeSpecifier->HasAnyStorageClassOf({ StorageClass::Static }))
             n += member->varDecls.size();
     }
 
@@ -949,7 +949,7 @@ bool FunctionDecl::IsMemberFunction() const
 
 bool FunctionDecl::IsStatic() const
 {
-    return returnType->HasAnyStorageClassesOf({ StorageClass::Static });
+    return returnType->HasAnyStorageClassOf({ StorageClass::Static });
 }
 
 std::string FunctionDecl::ToString(bool useParamNames) const
@@ -1195,19 +1195,46 @@ std::string UniformBufferDecl::ToString() const
     switch (bufferType)
     {
         case UniformBufferType::Undefined:
-            s = "<undefined buffer> ";
+            s = R_Undefined;
             break;
         case UniformBufferType::ConstantBuffer:
-            s = "cbuffer ";
+            s = "cbuffer";
             break;
         case UniformBufferType::TextureBuffer:
-            s = "tbuffer ";
+            s = "tbuffer";
             break;
     }
 
+    s += ' ';
     s += ident;
 
     return s;
+}
+
+TypeModifier UniformBufferDecl::DeriveCommonStorageLayout(const TypeModifier defaultStorgeLayout)
+{
+    /* Count number of row- and column major storage layouts */
+    std::size_t numRowMajors = 0,
+                numColMajors = 0;
+
+    for (const auto& varDeclStmnt : varMembers)
+    {
+        const auto& typeModifers = varDeclStmnt->typeSpecifier->typeModifiers;
+        if (typeModifers.find(TypeModifier::RowMajor) != typeModifers.end())
+            ++numRowMajors;
+        else if (typeModifers.find(TypeModifier::ColumnMajor) != typeModifers.end())
+            ++numColMajors;
+    }
+
+    /* Set storage layout that is used the most */
+    if (numRowMajors > 0 && numRowMajors >= numColMajors)
+        commonStorageLayout = TypeModifier::RowMajor;
+    else if (numColMajors > 0)
+        commonStorageLayout = TypeModifier::ColumnMajor;
+    else if (defaultStorgeLayout != TypeModifier::Undefined)
+        commonStorageLayout = defaultStorgeLayout;
+
+    return commonStorageLayout;
 }
 
 
@@ -1306,7 +1333,7 @@ void VarDeclStmnt::SetTypeModifier(const TypeModifier modifier)
     typeSpecifier->SetTypeModifier(modifier);
 }
 
-bool VarDeclStmnt::HasAnyTypeModifierOf(const std::vector<TypeModifier>& modifiers) const
+bool VarDeclStmnt::HasAnyTypeModifierOf(const std::initializer_list<TypeModifier>& modifiers) const
 {
     return typeSpecifier->HasAnyTypeModifierOf(modifiers);
 }
@@ -1323,7 +1350,7 @@ void VarDeclStmnt::ForEachVarDecl(const VarDeclIteratorFunctor& iterator)
 void VarDeclStmnt::MakeImplicitConst()
 {
     if ( !IsConstOrUniform() &&
-         !typeSpecifier->HasAnyStorageClassesOf({ StorageClass::Static, StorageClass::GroupShared }) )
+         !typeSpecifier->HasAnyStorageClassOf({ StorageClass::Static, StorageClass::GroupShared }) )
     {
         flags << VarDeclStmnt::isImplicitConst;
         typeSpecifier->isUniform = true;
