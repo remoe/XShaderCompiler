@@ -1510,25 +1510,6 @@ void HLSLAnalyzer::AnalyzeEntryPointInputOutput(FunctionDecl* funcDecl)
         AnalyzeEntryPointSemantics(funcDecl, inSemantics, outSemantics);
     }
 
-    /* Override all user output semantics if the function has a return type semantic */
-    if (funcDecl->semantic.IsValid() && !funcDecl->outputSemantics.Empty())
-    {
-        int semanticIndex = 0;
-
-        funcDecl->outputSemantics.ForEach(
-            [&](VarDecl* varDecl)
-            {
-                if(!varDecl->semantic.IsSystemValue())
-                {
-                    varDecl->semantic = IndexedSemantic(funcDecl->semantic, semanticIndex);
-                    ++semanticIndex;
-                 }
-            }
-        );
-
-        funcDecl->outputSemantics.UpdateDistribution();
-    }
-
     /* Check if there are duplicate output semantics */
     std::map<IndexedSemantic, int> outputSemanticCounter;
 
