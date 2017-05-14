@@ -138,10 +138,148 @@ IMPLEMENT_VISIT_PROC(SamplerDecl)
 
 /* --- Declaration statements --- */
 
+// BEGIN BANSHEE CHANGES
+Reflection::VarType DataTypeToVarType(DataType dataType)
+{
+#define CONVERSION_ENTRY(type) case DataType::type: return Reflection::VarType::type;
+
+    switch(dataType)
+    {
+    CONVERSION_ENTRY(Bool)
+    CONVERSION_ENTRY(Int)
+    CONVERSION_ENTRY(UInt)
+    CONVERSION_ENTRY(Half)
+    CONVERSION_ENTRY(Float)
+    CONVERSION_ENTRY(Double)
+    CONVERSION_ENTRY(Bool2)
+    CONVERSION_ENTRY(Bool3)
+    CONVERSION_ENTRY(Bool4)
+    CONVERSION_ENTRY(Int2)
+    CONVERSION_ENTRY(Int3)
+    CONVERSION_ENTRY(Int4)
+    CONVERSION_ENTRY(UInt2)
+    CONVERSION_ENTRY(UInt3)
+    CONVERSION_ENTRY(UInt4)
+    CONVERSION_ENTRY(Half2)
+    CONVERSION_ENTRY(Half3)
+    CONVERSION_ENTRY(Half4)
+    CONVERSION_ENTRY(Float2)
+    CONVERSION_ENTRY(Float3)
+    CONVERSION_ENTRY(Float4)
+    CONVERSION_ENTRY(Double2)
+    CONVERSION_ENTRY(Double3)
+    CONVERSION_ENTRY(Double4)
+    CONVERSION_ENTRY(Bool2x2)
+    CONVERSION_ENTRY(Bool2x3)
+    CONVERSION_ENTRY(Bool2x4)
+    CONVERSION_ENTRY(Bool3x2)
+    CONVERSION_ENTRY(Bool3x3)
+    CONVERSION_ENTRY(Bool3x4)
+    CONVERSION_ENTRY(Bool4x2)
+    CONVERSION_ENTRY(Bool4x3)
+    CONVERSION_ENTRY(Bool4x4)
+    CONVERSION_ENTRY(Int2x2)
+    CONVERSION_ENTRY(Int2x3)
+    CONVERSION_ENTRY(Int2x4)
+    CONVERSION_ENTRY(Int3x2)
+    CONVERSION_ENTRY(Int3x3)
+    CONVERSION_ENTRY(Int3x4)
+    CONVERSION_ENTRY(Int4x2)
+    CONVERSION_ENTRY(Int4x3)
+    CONVERSION_ENTRY(Int4x4)
+    CONVERSION_ENTRY(UInt2x2)
+    CONVERSION_ENTRY(UInt2x3)
+    CONVERSION_ENTRY(UInt2x4)
+    CONVERSION_ENTRY(UInt3x2)
+    CONVERSION_ENTRY(UInt3x3)
+    CONVERSION_ENTRY(UInt3x4)
+    CONVERSION_ENTRY(UInt4x2)
+    CONVERSION_ENTRY(UInt4x3)
+    CONVERSION_ENTRY(UInt4x4)
+    CONVERSION_ENTRY(Half2x2)
+    CONVERSION_ENTRY(Half2x3)
+    CONVERSION_ENTRY(Half2x4)
+    CONVERSION_ENTRY(Half3x2)
+    CONVERSION_ENTRY(Half3x3)
+    CONVERSION_ENTRY(Half3x4)
+    CONVERSION_ENTRY(Half4x2)
+    CONVERSION_ENTRY(Half4x3)
+    CONVERSION_ENTRY(Half4x4)
+    CONVERSION_ENTRY(Float2x2)
+    CONVERSION_ENTRY(Float2x3)
+    CONVERSION_ENTRY(Float2x4)
+    CONVERSION_ENTRY(Float3x2)
+    CONVERSION_ENTRY(Float3x3)
+    CONVERSION_ENTRY(Float3x4)
+    CONVERSION_ENTRY(Float4x2)
+    CONVERSION_ENTRY(Float4x3)
+    CONVERSION_ENTRY(Float4x4)
+    CONVERSION_ENTRY(Double2x2)
+    CONVERSION_ENTRY(Double2x3)
+    CONVERSION_ENTRY(Double2x4)
+    CONVERSION_ENTRY(Double3x2)
+    CONVERSION_ENTRY(Double3x3)
+    CONVERSION_ENTRY(Double3x4)
+    CONVERSION_ENTRY(Double4x2)
+    CONVERSION_ENTRY(Double4x3)
+    CONVERSION_ENTRY(Double4x4)
+    default:
+        return Reflection::VarType::Undefined;
+    }
+
+#undef CONVERSION_ENTRY
+}
+// END BANSHEE CHANGES
+
 IMPLEMENT_VISIT_PROC(FunctionDecl)
 {
     if (ast->flags(FunctionDecl::isEntryPoint))
         ReflectAttributes(ast->attribs);
+
+    // BEGIN BANSHEE CHANGES
+
+    Reflection::Function function;
+    function.ident = ast->ident;
+
+    if (ast->returnType)
+    {
+        if (auto baseTypeDenoter = ast->returnType->typeDenoter->As<BaseTypeDenoter>())
+            function.returnValue = DataTypeToVarType(baseTypeDenoter->dataType);
+        else
+            function.returnValue = Reflection::VarType::Undefined;
+    }
+    else
+        function.returnValue = Reflection::VarType::Void;
+
+    for(auto& entry : ast->parameters)
+    {
+        if (entry->varDecls.size() == 0)
+            continue;
+
+        VarDeclPtr varDecl = entry->varDecls[0];
+
+        Reflection::Parameter param;
+        param.ident = varDecl->ident;
+
+        if (entry->typeSpecifier && entry->typeSpecifier->typeDenoter)
+        {
+            if (auto baseTypeDenoter = entry->typeSpecifier->typeDenoter->As<BaseTypeDenoter>())
+                param.type = DataTypeToVarType(baseTypeDenoter->dataType);
+            else
+                param.type = Reflection::VarType::Undefined;
+
+            param.flags = entry->typeSpecifier->IsInput() ? Reflection::Parameter::Flags::In : 0;
+            param.flags |= entry->typeSpecifier->IsOutput() ? Reflection::Parameter::Flags::Out : 0;
+        }
+        else
+            param.type = Reflection::VarType::Undefined;
+
+        function.parameters.push_back(param);
+    }
+
+    data_->functions.push_back(function);
+
+    // END BANSHEE CHANGES
 
     Visitor::VisitFunctionDecl(ast, args);
 }

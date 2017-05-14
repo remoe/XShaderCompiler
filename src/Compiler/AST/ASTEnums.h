@@ -624,8 +624,11 @@ enum class AttributeType
     /* --- Language extensions --- */
     Space,
     Layout,
+
+    // BEGIN BANSHEE CHANGES
     Color,
     Internal,
+    // END BANSHEE CHANGES
 
     #endif
 };

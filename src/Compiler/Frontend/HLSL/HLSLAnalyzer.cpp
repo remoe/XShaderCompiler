@@ -378,6 +378,7 @@ IMPLEMENT_VISIT_PROC(UniformBufferDecl)
     }
     PopUniformBufferDecl();
 
+    // BEGIN BANSHEE CHANGES
 #ifdef XSC_ENABLE_LANGUAGE_EXT
     for (const auto& attrib : ast->attribs)
     {
@@ -385,6 +386,7 @@ IMPLEMENT_VISIT_PROC(UniformBufferDecl)
             ast->extModifiers |= ExtModifiers::Internal;
     }
 #endif
+    // END BANSHEE CHANGES
 }
 
 IMPLEMENT_VISIT_PROC(VarDeclStmnt)

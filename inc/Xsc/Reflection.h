@@ -130,6 +130,96 @@ enum class UniformType
     Struct
 };
 
+enum class VarType
+{
+    Undefined,
+    Void,
+
+    // Scalar types
+    Bool,
+    Int,
+    UInt,
+    Half,
+    Float,
+    Double,
+
+    // Vector types
+    Bool2,
+    Bool3,
+    Bool4,
+    Int2,
+    Int3,
+    Int4,
+    UInt2,
+    UInt3,
+    UInt4,
+    Half2,
+    Half3,
+    Half4,
+    Float2,
+    Float3,
+    Float4,
+    Double2,
+    Double3,
+    Double4,
+
+    // Matrix types
+    Bool2x2,
+    Bool2x3,
+    Bool2x4,
+    Bool3x2,
+    Bool3x3,
+    Bool3x4,
+    Bool4x2,
+    Bool4x3,
+    Bool4x4,
+    Int2x2,
+    Int2x3,
+    Int2x4,
+    Int3x2,
+    Int3x3,
+    Int3x4,
+    Int4x2,
+    Int4x3,
+    Int4x4,
+    UInt2x2,
+    UInt2x3,
+    UInt2x4,
+    UInt3x2,
+    UInt3x3,
+    UInt3x4,
+    UInt4x2,
+    UInt4x3,
+    UInt4x4,
+    Half2x2,
+    Half2x3,
+    Half2x4,
+    Half3x2,
+    Half3x3,
+    Half3x4,
+    Half4x2,
+    Half4x3,
+    Half4x4,
+    Float2x2,
+    Float2x3,
+    Float2x4,
+    Float3x2,
+    Float3x3,
+    Float3x4,
+    Float4x2,
+    Float4x3,
+    Float4x4,
+    Double2x2,
+    Double2x3,
+    Double2x4,
+    Double3x2,
+    Double3x3,
+    Double3x4,
+    Double4x2,
+    Double4x3,
+    Double4x4,
+};
+
 union DefaultValue
 {
     bool boolean;
@@ -140,7 +230,7 @@ union DefaultValue
     int handle;
 };
 
-//! A single element in a constant buffer 
+//! A single element in a constant buffer or an opaque type
 struct Uniform
 {
     enum Flags
@@ -168,6 +258,33 @@ struct Uniform
 
     //! Flags further defining the uniform.
     int flags = None;
+};
+
+//! Single parameter in a function.
+struct Parameter
+{
+    enum Flags
+    {
+        In = 1 << 0,
+        Out = 1 << 1
+    };
+
+    VarType type;
+    std::string ident;
+    int flags;
+};
+
+//! A single function defined in the program
+struct Function
+{
+    //! Name of the function
+    std::string ident;
+
+    //! Return value of the function
+    VarType returnValue;
+
+    //! List of all function parameters
+    std::vector<Parameter> parameters;
 };
 
 // END BANSHEE CHANGES
@@ -215,6 +332,8 @@ struct ReflectionData
     // BEGIN BANSHEE CHANGES
     std::vector<Uniform>                uniforms;
     std::vector<DefaultValue>           defaultValues;
+
+    std::vector<Function>               functions;
     // END BANSHEE CHANGES
 };
 
