@@ -129,7 +129,7 @@ IMPLEMENT_VISIT_PROC(SamplerDecl)
     Reflection::Uniform uniform;
     uniform.ident = ast->ident;
     uniform.type = Reflection::UniformType::Sampler;
-    uniform.baseType = (int)SamplerType::SamplerState;
+    uniform.baseType = 0;
 
     data_->uniforms.push_back(uniform);
 
@@ -139,6 +139,133 @@ IMPLEMENT_VISIT_PROC(SamplerDecl)
 /* --- Declaration statements --- */
 
 // BEGIN BANSHEE CHANGES
+
+Reflection::DataType DataTypeToReflType(DataType dataType)
+{
+#define CONVERSION_ENTRY(type) case DataType::type: return Reflection::DataType::type;
+
+    switch (dataType)
+    {
+    CONVERSION_ENTRY(Bool)
+    CONVERSION_ENTRY(Int)
+    CONVERSION_ENTRY(UInt)
+    CONVERSION_ENTRY(Half)
+    CONVERSION_ENTRY(Float)
+    CONVERSION_ENTRY(Double)
+    CONVERSION_ENTRY(Bool2)
+    CONVERSION_ENTRY(Bool3)
+    CONVERSION_ENTRY(Bool4)
+    CONVERSION_ENTRY(Int2)
+    CONVERSION_ENTRY(Int3)
+    CONVERSION_ENTRY(Int4)
+    CONVERSION_ENTRY(UInt2)
+    CONVERSION_ENTRY(UInt3)
+    CONVERSION_ENTRY(UInt4)
+    CONVERSION_ENTRY(Half2)
+    CONVERSION_ENTRY(Half3)
+    CONVERSION_ENTRY(Half4)
+    CONVERSION_ENTRY(Float2)
+    CONVERSION_ENTRY(Float3)
+    CONVERSION_ENTRY(Float4)
+    CONVERSION_ENTRY(Double2)
+    CONVERSION_ENTRY(Double3)
+    CONVERSION_ENTRY(Double4)
+    CONVERSION_ENTRY(Bool2x2)
+    CONVERSION_ENTRY(Bool2x3)
+    CONVERSION_ENTRY(Bool2x4)
+    CONVERSION_ENTRY(Bool3x2)
+    CONVERSION_ENTRY(Bool3x3)
+    CONVERSION_ENTRY(Bool3x4)
+    CONVERSION_ENTRY(Bool4x2)
+    CONVERSION_ENTRY(Bool4x3)
+    CONVERSION_ENTRY(Bool4x4)
+    CONVERSION_ENTRY(Int2x2)
+    CONVERSION_ENTRY(Int2x3)
+    CONVERSION_ENTRY(Int2x4)
+    CONVERSION_ENTRY(Int3x2)
+    CONVERSION_ENTRY(Int3x3)
+    CONVERSION_ENTRY(Int3x4)
+    CONVERSION_ENTRY(Int4x2)
+    CONVERSION_ENTRY(Int4x3)
+    CONVERSION_ENTRY(Int4x4)
+    CONVERSION_ENTRY(UInt2x2)
+    CONVERSION_ENTRY(UInt2x3)
+    CONVERSION_ENTRY(UInt2x4)
+    CONVERSION_ENTRY(UInt3x2)
+    CONVERSION_ENTRY(UInt3x3)
+    CONVERSION_ENTRY(UInt3x4)
+    CONVERSION_ENTRY(UInt4x2)
+    CONVERSION_ENTRY(UInt4x3)
+    CONVERSION_ENTRY(UInt4x4)
+    CONVERSION_ENTRY(Half2x2)
+    CONVERSION_ENTRY(Half2x3)
+    CONVERSION_ENTRY(Half2x4)
+    CONVERSION_ENTRY(Half3x2)
+    CONVERSION_ENTRY(Half3x3)
+    CONVERSION_ENTRY(Half3x4)
+    CONVERSION_ENTRY(Half4x2)
+    CONVERSION_ENTRY(Half4x3)
+    CONVERSION_ENTRY(Half4x4)
+    CONVERSION_ENTRY(Float2x2)
+    CONVERSION_ENTRY(Float2x3)
+    CONVERSION_ENTRY(Float2x4)
+    CONVERSION_ENTRY(Float3x2)
+    CONVERSION_ENTRY(Float3x3)
+    CONVERSION_ENTRY(Float3x4)
+    CONVERSION_ENTRY(Float4x2)
+    CONVERSION_ENTRY(Float4x3)
+    CONVERSION_ENTRY(Float4x4)
+    CONVERSION_ENTRY(Double2x2)
+    CONVERSION_ENTRY(Double2x3)
+    CONVERSION_ENTRY(Double2x4)
+    CONVERSION_ENTRY(Double3x2)
+    CONVERSION_ENTRY(Double3x3)
+    CONVERSION_ENTRY(Double3x4)
+    CONVERSION_ENTRY(Double4x2)
+    CONVERSION_ENTRY(Double4x3)
+    CONVERSION_ENTRY(Double4x4)
+    default:
+        return Reflection::DataType::Undefined;
+    }
+
+#undef CONVERSION_ENTRY
+}
+
+Reflection::BufferType BufferTypeToReflType(BufferType bufferType)
+{
+#define CONVERSION_ENTRY(type) case BufferType::type: return Reflection::BufferType::type;
+
+    switch (bufferType)
+    {
+    CONVERSION_ENTRY(Buffer)
+    CONVERSION_ENTRY(StructuredBuffer)
+    CONVERSION_ENTRY(ByteAddressBuffer)
+    CONVERSION_ENTRY(RWBuffer)
+    CONVERSION_ENTRY(RWStructuredBuffer)
+    CONVERSION_ENTRY(RWByteAddressBuffer)
+    CONVERSION_ENTRY(AppendStructuredBuffer)
+    CONVERSION_ENTRY(ConsumeStructuredBuffer)
+    CONVERSION_ENTRY(RWTexture1D)
+    CONVERSION_ENTRY(RWTexture1DArray)
+    CONVERSION_ENTRY(RWTexture2D)
+    CONVERSION_ENTRY(RWTexture2DArray)
+    CONVERSION_ENTRY(RWTexture3D)
+    CONVERSION_ENTRY(Texture1D)
+    CONVERSION_ENTRY(Texture1DArray)
+    CONVERSION_ENTRY(Texture2D)
+    CONVERSION_ENTRY(Texture2DArray)
+    CONVERSION_ENTRY(Texture3D)
+    CONVERSION_ENTRY(TextureCube)
+    CONVERSION_ENTRY(TextureCubeArray)
+    CONVERSION_ENTRY(Texture2DMS)
+    CONVERSION_ENTRY(Texture2DMSArray)
+    default:
+        return Reflection::BufferType::Undefined;
+    }
+
+#undef CONVERSION_ENTRY
+}
+
 Reflection::VarType DataTypeToVarType(DataType dataType)
 {
 #define CONVERSION_ENTRY(type) case DataType::type: return Reflection::VarType::type;
@@ -297,8 +424,8 @@ IMPLEMENT_VISIT_PROC(UniformBufferDecl)
 
         Reflection::Uniform uniform;
         uniform.ident = ast->ident;
-        uniform.type = Reflection::UniformType::Buffer;
-        uniform.baseType = (int)ast->bufferType;
+        uniform.type = Reflection::UniformType::UniformBuffer;
+        uniform.baseType = 0;
 
         if ((ast->extModifiers & ExtModifiers::Internal) != 0)
             uniform.flags = Reflection::Uniform::Flags::Internal;
@@ -328,7 +455,7 @@ IMPLEMENT_VISIT_PROC(UniformBufferDecl)
                 Reflection::Uniform uniform;
                 uniform.ident = decl->ident;
                 uniform.type = type;
-                uniform.baseType = (int)baseType;
+                uniform.baseType = (int)DataTypeToReflType(baseType);
                 uniform.uniformBlock = blockIdx;
                 uniform.flags = 0;
 
@@ -387,7 +514,7 @@ IMPLEMENT_VISIT_PROC(BufferDeclStmnt)
                 Reflection::Uniform uniform;
                 uniform.ident = bufferDecl->ident;
                 uniform.type = Reflection::UniformType::Buffer;
-                uniform.baseType = (int)ast->typeDenoter->bufferType;
+                uniform.baseType = (int)BufferTypeToReflType(ast->typeDenoter->bufferType);
 
                 if ((ast->typeDenoter->extModifiers & ExtModifiers::Internal) != 0)
                     uniform.flags |= Reflection::Uniform::Flags::Internal;
