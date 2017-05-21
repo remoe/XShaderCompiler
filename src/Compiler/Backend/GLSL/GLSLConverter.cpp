@@ -152,6 +152,7 @@ IMPLEMENT_VISIT_PROC(CodeBlock)
     VisitScopedStmntList(ast->stmnts);
 }
 
+//TODO: reset 'prefixExpr' for texture intrinsic calls
 IMPLEMENT_VISIT_PROC(CallExpr)
 {
     Visit(ast->prefixExpr);
@@ -161,7 +162,7 @@ IMPLEMENT_VISIT_PROC(CallExpr)
         /* Insert prefix expression as first argument into function call, if this is a texture intrinsic call */
         if (IsTextureIntrinsic(ast->intrinsic) && ast->prefixExpr)
         {
-            if (UseSeparateSamplers())
+            if (UseSeparateSamplers() && !IsTextureLoadIntrinsic(ast->intrinsic))
             {
                 /* Replace sampler state argument by sampler/texture binding call */
                 if (!ast->arguments.empty())
@@ -822,9 +823,6 @@ void GLSLConverter::ConvertFunctionDeclEntryPoint(FunctionDecl* ast)
 
 void GLSLConverter::ConvertIntrinsicCall(CallExpr* ast)
 {
-    if (IsGatherIntrisic(ast->intrinsic))
-        ConvertIntrinsicCallGather(ast);
-
     switch (ast->intrinsic)
     {
         case Intrinsic::InterlockedAdd:
@@ -837,32 +835,40 @@ void GLSLConverter::ConvertIntrinsicCall(CallExpr* ast)
         case Intrinsic::InterlockedExchange:
             ConvertIntrinsicCallImageAtomic(ast);
             break;
+
         case Intrinsic::Saturate:
             ConvertIntrinsicCallSaturate(ast);
             break;
+
         case Intrinsic::Tex1DLod:
         case Intrinsic::Tex2DLod:
         case Intrinsic::Tex3DLod:
         case Intrinsic::TexCubeLod:
             ConvertIntrinsicCallTexLod(ast);
             break;
+
         case Intrinsic::Texture_Sample_2:
         case Intrinsic::Texture_Sample_3:
         case Intrinsic::Texture_Sample_4:
         case Intrinsic::Texture_Sample_5:
             ConvertIntrinsicCallTextureSample(ast);
             break;
+
         case Intrinsic::Texture_SampleLevel_3:
         case Intrinsic::Texture_SampleLevel_4:
         case Intrinsic::Texture_SampleLevel_5:
             ConvertIntrinsicCallTextureSampleLevel(ast);
             break;
+
         case Intrinsic::Texture_Load_1:
         case Intrinsic::Texture_Load_2:
         case Intrinsic::Texture_Load_3:
             ConvertIntrinsicCallTextureLoad(ast);
             break;
+
         default:
+            if (IsGatherIntrisic(ast->intrinsic))
+                ConvertIntrinsicCallGather(ast);
             break;
     }
 }
@@ -1002,13 +1008,16 @@ void GLSLConverter::ConvertIntrinsicCallTextureLoad(CallExpr* ast)
                 auto tempVarTypeSpecifier   = ASTFactory::MakeTypeSpecifier(args[1]->GetTypeDenoter());
                 auto tempVarDeclStmnt       = ASTFactory::MakeVarDeclStmnt(tempVarTypeSpecifier, tempVarIdent, args[1]);
 
+                /* Insert temporary varibale declaration before the current statement, and visit this AST node for conversion */
                 InsertStmntBefore(tempVarDeclStmnt);
+                Visit(tempVarDeclStmnt);
 
+                /* Make new argument expressions */
                 const std::string vectorSubscript = "xyzw";
 
-                auto subExpr = ASTFactory::MakeObjectExpr(tempVarDeclStmnt->varDecls.front().get());
-                auto arg1Expr = ASTFactory::MakeObjectExpr(subExpr, vectorSubscript.substr(0, textureDim));
-                auto arg2Expr = ASTFactory::MakeObjectExpr(subExpr, vectorSubscript.substr(textureDim, 1));
+                auto prefixExpr = ASTFactory::MakeObjectExpr(tempVarDeclStmnt->varDecls.front().get());
+                auto arg1Expr   = ASTFactory::MakeObjectExpr(prefixExpr, vectorSubscript.substr(0, textureDim));
+                auto arg2Expr   = ASTFactory::MakeObjectExpr(prefixExpr, vectorSubscript.substr(textureDim, 1));
 
                 args[1] = arg1Expr;
                 args.insert(args.begin() + 2, arg2Expr);

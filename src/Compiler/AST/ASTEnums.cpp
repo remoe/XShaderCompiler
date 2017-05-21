@@ -997,6 +997,11 @@ bool IsTextureCompareIntrinsic(const Intrinsic t)
            (t >= Intrinsic::Texture_SampleCmp_3 && t <= Intrinsic::Texture_SampleCmp_6);
 }
 
+bool IsTextureLoadIntrinsic(const Intrinsic t)
+{
+    return (t >= Intrinsic::Texture_Load_1 && t <= Intrinsic::Texture_Load_3);
+}
+
 Intrinsic CompareOpToIntrinsic(const BinaryOp op)
 {
     switch (op)
@@ -1026,6 +1031,7 @@ Intrinsic InterlockedToImageAtomicIntrinsic(const Intrinsic t)
         default:                                    return t;
     }
 }
+
 
 /* ----- Gather intrinsics ----- */
 
@@ -1125,6 +1131,7 @@ int GetGatherIntrinsicComponentIndex(const Intrinsic t)
         return 0;
 }
 
+
 /* ----- IndexedSemantic Class ----- */
 
 IndexedSemantic::IndexedSemantic(Semantic semantic, int index) :
@@ -1205,6 +1212,11 @@ void IndexedSemantic::Reset()
     semantic_   = Semantic::Undefined;
     index_      = 0;
     userDefined_.clear();
+}
+
+void IndexedSemantic::ResetIndex(int index)
+{
+    index_ = index;
 }
 
 void IndexedSemantic::MakeUserDefined(const std::string& semanticName)

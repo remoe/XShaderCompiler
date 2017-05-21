@@ -18,6 +18,7 @@
 #include "TypeDenoter.h"
 #include "Identifier.h"
 #include <vector>
+#include <initializer_list>
 #include <string>
 #include <set>
 #include <map>
@@ -476,10 +477,10 @@ struct TypeSpecifier : public TypedAST
     void SetTypeModifier(const TypeModifier modifier);
 
     // Returns true if any of the specified type modifiers is contained.
-    bool HasAnyTypeModifierOf(const std::vector<TypeModifier>& modifiers) const;
+    bool HasAnyTypeModifierOf(const std::initializer_list<TypeModifier>& modifiers) const;
 
     // Returns true if any of the specified storage classes is contained.
-    bool HasAnyStorageClassesOf(const std::vector<StorageClass>& modifiers) const;
+    bool HasAnyStorageClassOf(const std::initializer_list<StorageClass>& modifiers) const;
 
     // Swaps the 'row_major' with 'column_major' storage layout, and inserts the specified default layout if none of these are set.
     void SwapMatrixStorageLayout(const TypeModifier defaultStorgeLayout);
@@ -758,7 +759,7 @@ struct FunctionDecl : public Stmnt
     // Returns true if this is a member function (member of a structure).
     bool IsMemberFunction() const;
 
-    // Returns true if this is a static function (see TypeSpecifier::HasAnyStorageClassesOf).
+    // Returns true if this is a static function (see TypeSpecifier::HasAnyStorageClassOf).
     bool IsStatic() const;
     
     // Returns a descriptive string of the function signature (e.g. "void f(int x)").
@@ -810,12 +811,16 @@ struct UniformBufferDecl : public Stmnt
 
     std::string ToString() const;
 
-    UniformBufferType               bufferType      = UniformBufferType::Undefined;
+    // Derives the common storage layout type modifier of all variable members (see 'commonStorageLayout' member).
+    TypeModifier DeriveCommonStorageLayout(const TypeModifier defaultStorgeLayout = TypeModifier::Undefined);
+
+    UniformBufferType               bufferType          = UniformBufferType::Undefined;
     std::string                     ident;
     std::vector<RegisterPtr>        slotRegisters;
-    std::vector<StmntPtr>           localStmnts;                                    // Local declaration statements
+    std::vector<StmntPtr>           localStmnts;                                        // Local declaration statements
 
-    std::vector<VarDeclStmntPtr>    varMembers;                                     // List of all member variable declaration statements.
+    std::vector<VarDeclStmntPtr>    varMembers;                                         // List of all member variable declaration statements.
+    TypeModifier                    commonStorageLayout = TypeModifier::ColumnMajor;    // 
 
     // BEGIN BANSHEE CHANGES
     int             extModifiers = 0;
@@ -893,7 +898,7 @@ struct VarDeclStmnt : public Stmnt
     void SetTypeModifier(const TypeModifier modifier);
 
     // Returns true if any of the specified type modifiers is contained.
-    bool HasAnyTypeModifierOf(const std::vector<TypeModifier>& modifiers) const;
+    bool HasAnyTypeModifierOf(const std::initializer_list<TypeModifier>& modifiers) const;
 
     // Iterates over each VarDecl AST node.
     void ForEachVarDecl(const VarDeclIteratorFunctor& iterator);

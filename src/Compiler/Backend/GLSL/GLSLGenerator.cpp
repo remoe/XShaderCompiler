@@ -62,6 +62,7 @@ void GLSLGenerator::GenerateCodePrimary(
     preserveComments_   = outputDesc.options.preserveComments;
     separateShaders_    = outputDesc.options.separateShaders;
     separateSamplers_   = outputDesc.options.separateSamplers;
+    autoBinding_        = outputDesc.options.autoBinding;
     allowLineMarks_     = outputDesc.formatting.lineMarks;
     compactWrappers_    = outputDesc.formatting.compactWrappers;
     alwaysBracedScopes_ = outputDesc.formatting.alwaysBracedScopes;
@@ -74,6 +75,9 @@ void GLSLGenerator::GenerateCodePrimary(
     {
         const auto semanticCi = ToCiString(s.semantic);
         vertexSemanticsMap_[semanticCi] = { s.location, 0 };
+
+        if (s.location >= 0)
+            usedLocationsSet_.insert(s.location);
     }
 
     if (program.entryPointRef)
@@ -259,6 +263,90 @@ void GLSLGenerator::ReportOptionalFeedback()
 void GLSLGenerator::ErrorIntrinsic(const std::string& intrinsicName, const AST* ast)
 {
     Error(R_FailedToMapToGLSLKeyword(R_Intrinsic(intrinsicName)), ast);
+}
+
+int GLSLGenerator::GetNumBindingLocations(TypeDenoterPtr typeDenoter)
+{
+    int numArrayElements = 1;
+
+    while (auto arrayTypeDen = typeDenoter->As<ArrayTypeDenoter>())
+    {
+        for (const auto& dim : arrayTypeDen->arrayDims)
+            numArrayElements *= dim->size;
+
+        typeDenoter = arrayTypeDen->subTypeDenoter;
+    }
+
+    if (numArrayElements == 0)
+        return -1;
+
+    if (auto baseTypeDen = typeDenoter->As<BaseTypeDenoter>())
+    {
+        const auto dataType = baseTypeDen->dataType;
+
+        /* Determine number of locations required by type */
+        int elementSize = 0;
+
+        if (IsScalarType(dataType))
+            elementSize = 1;
+        else if (IsVectorType(dataType))
+        {
+            int dims = VectorTypeDim(dataType);
+
+            /* 3- and 4-component double vectors require two locations */
+            if (IsDoubleRealType(dataType) && dims > 2)
+                elementSize = 2;
+            else
+                elementSize = 1;
+        }
+        else if (IsMatrixType(dataType))
+        {
+            auto dims = MatrixTypeDim(dataType);
+
+            int rowDim = dims.second;
+            int rowSize = 0;
+
+            /* 3- and 4-component double vectors require two locations */
+            if (IsDoubleRealType(dataType) && rowDim > 2)
+                rowSize = 2;
+            else
+                rowSize = 1;
+
+            elementSize = dims.first * rowSize;
+        }
+
+        if (elementSize != 0)
+            return elementSize * numArrayElements;
+    }
+
+    return -1;
+}
+
+int GLSLGenerator::GetBindingLocation(const TypeDenoterPtr& typeDenoter)
+{
+    int numLocations = GetNumBindingLocations(typeDenoter);
+    if (numLocations == -1)
+        return -1;
+
+    /* Find enough consecutive empty locations to hold the type */
+    int startLocation   = 0;
+    int endLocation     = startLocation + numLocations - 1;
+
+    for (auto entry : usedLocationsSet_)
+    {
+        if (entry >= startLocation && entry <= endLocation)
+        {
+            startLocation   = entry + 1;
+            endLocation     = startLocation + numLocations - 1;
+        }
+        else if (entry > endLocation)
+            break;
+    }
+
+    for (auto i = startLocation; i <= endLocation; ++i)
+        usedLocationsSet_.insert(i);
+
+    return startLocation;
 }
 
 /* ------- Visit functions ------- */
@@ -453,11 +541,18 @@ IMPLEMENT_VISIT_PROC(UniformBufferDecl)
         WriteLineMark(ast);
 
         /* Write uniform buffer declaration */
+        ast->DeriveCommonStorageLayout();
+
         BeginLn();
 
         WriteLayout(
             {
                 [&]() { Write("std140"); },
+                [&]()
+                {
+                    if (ast->commonStorageLayout == TypeModifier::RowMajor)
+                        Write("row_major");
+                },
                 [&]() { WriteLayoutBinding(ast->slotRegisters); },
             }
         );
@@ -554,7 +649,7 @@ IMPLEMENT_VISIT_PROC(VarDeclStmnt)
     #endif
 
     /* Ignore declaration statement of static member variables */
-    if (ast->typeSpecifier->HasAnyStorageClassesOf({ StorageClass::Static }) && ast->FetchStructDeclRef() != nullptr)
+    if (ast->typeSpecifier->HasAnyStorageClassOf({ StorageClass::Static }) && ast->FetchStructDeclRef() != nullptr)
         return;
 
     BeginLn();
@@ -1491,17 +1586,30 @@ void GLSLGenerator::WriteGlobalInputSemanticsVarDecl(VarDecl* varDecl)
 
             if (explicitBinding_ && IsVertexShader() && varDecl->semantic.IsValid())
             {
+                int location = -1;
+
                 auto it = vertexSemanticsMap_.find(ToCiString(varDecl->semantic.ToString()));
                 if (it != vertexSemanticsMap_.end())
+                {
+                    location = it->second.location;
+                    it->second.found = true;
+                }
+
+                if (location == -1 && autoBinding_)
+                    location = GetBindingLocation(varDecl->declStmntRef->typeSpecifier->typeDenoter);
+
+                if (location != -1)
                 {
                     /* Write layout location and increment use count for warning-feedback */
                     WriteLayout(
                         {
-                            [&]() { Write("location = " + std::to_string(it->second.location)); }
+                            [&]() { Write("location = " + std::to_string(location)); }
                         }
                     );
-                    it->second.found = true;
                 }
+
+                /* Reset the semantic index for code reflection output */
+                varDecl->semantic.ResetIndex(location);
             }
 
             Separator();
@@ -2008,9 +2116,20 @@ void GLSLGenerator::WriteTypeModifiers(const std::set<TypeModifier>& typeModifie
     /* Matrix packing alignment can only be written for uniform buffers */
     if (InsideUniformBufferDecl() && typeDenoter && typeDenoter->IsMatrix())
     {
-        /* Only write 'row_major' type modifier (column major is the default) */
-        if (typeModifiers.find(TypeModifier::RowMajor) != typeModifiers.end())
-            WriteLayout("row_major");
+        const auto commonStorageLayout = GetUniformBufferDeclStack().back()->commonStorageLayout;
+
+        if (commonStorageLayout == TypeModifier::ColumnMajor)
+        {
+            /* Only write 'row_major' type modifier, because 'column_major' is the default in the current uniform buffer */
+            if (typeModifiers.find(TypeModifier::RowMajor) != typeModifiers.end())
+                WriteLayout("row_major");
+        }
+        else
+        {
+            /* Only write 'column_major' type modifier, because 'row_major' is the default in the current uniform buffer */
+            if (typeModifiers.find(TypeModifier::ColumnMajor) != typeModifiers.end())
+                WriteLayout("column_major");
+        }
     }
 
     if (typeModifiers.find(TypeModifier::Const) != typeModifiers.end())

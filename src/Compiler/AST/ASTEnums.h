@@ -970,6 +970,9 @@ int GetGatherIntrinsicComponentIndex(const Intrinsic t);
 // Returns true if the specified intrinsic is a texture sample or gather intrisic, with a compare operation.
 bool IsTextureCompareIntrinsic(const Intrinsic t);
 
+// Returns true if the specified intrinsic is a texture load intrisic (e.g. Texture_Load1).
+bool IsTextureLoadIntrinsic(const Intrinsic t);
+
 // Returns the respective intrinsic for the specified binary compare operator, or Intrinsic::Undefined if the operator is not a compare operator.
 Intrinsic CompareOpToIntrinsic(const BinaryOp op);
 
@@ -1057,6 +1060,9 @@ class IndexedSemantic
 
         // Resest this semantic to undefined.
         void Reset();
+
+        // Restes the index of this semantic.
+        void ResetIndex(int index);
 
         // Converts this system value semantic to a user defined semantic.
         void MakeUserDefined(const std::string& semanticName = "");
