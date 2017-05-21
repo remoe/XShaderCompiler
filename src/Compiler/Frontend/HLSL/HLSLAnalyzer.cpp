@@ -756,79 +756,81 @@ void HLSLAnalyzer::AnalyzeVarDeclLocal(VarDecl* varDecl, bool registerVarIdent)
 
         // BEGIN BANSHEE CHANGES
 
-        auto baseTypeDen = varDecl->GetTypeDenoter()->As<BaseTypeDenoter>();
-        if (baseTypeDen->IsScalar())
+        if (auto baseTypeDen = varDecl->GetTypeDenoter()->As<BaseTypeDenoter>())
         {
-            if (auto literalExpr = varDecl->initializer->As<LiteralExpr>())
+            if (baseTypeDen->IsScalar())
             {
-                auto variant = Variant::ParseFrom(literalExpr->value);
-
-                switch (literalExpr->dataType)
+                if (auto literalExpr = varDecl->initializer->As<LiteralExpr>())
                 {
-                case DataType::Bool:
-                    varDecl->defaultValue.boolean = variant.Bool();
-                    varDecl->defaultValue.available = true;
-                    break;
-                case DataType::Int:
-                    varDecl->defaultValue.integer = (int)variant.Int();
-                    varDecl->defaultValue.available = true;
-                    break;
-                case DataType::UInt:
-                    varDecl->defaultValue.integer = (int)variant.Int();
-                    varDecl->defaultValue.available = true;
-                    break;
-                case DataType::Half:
-                case DataType::Float:
-                case DataType::Double:
-                    varDecl->defaultValue.real = (float)variant.Real();
-                    varDecl->defaultValue.available = true;
-                    break;
-                default:
-                    break;
+                    auto variant = Variant::ParseFrom(literalExpr->value);
+
+                    switch (literalExpr->dataType)
+                    {
+                    case DataType::Bool:
+                        varDecl->defaultValue.boolean = variant.Bool();
+                        varDecl->defaultValue.available = true;
+                        break;
+                    case DataType::Int:
+                        varDecl->defaultValue.integer = (int)variant.Int();
+                        varDecl->defaultValue.available = true;
+                        break;
+                    case DataType::UInt:
+                        varDecl->defaultValue.integer = (int)variant.Int();
+                        varDecl->defaultValue.available = true;
+                        break;
+                    case DataType::Half:
+                    case DataType::Float:
+                    case DataType::Double:
+                        varDecl->defaultValue.real = (float)variant.Real();
+                        varDecl->defaultValue.available = true;
+                        break;
+                    default:
+                        break;
+                    }
                 }
             }
-        }
-        else
-        {
-            if (auto initExpr = varDecl->initializer->As<InitializerExpr>())
+            else
             {
-                int numElements = 0;
-                if (baseTypeDen->IsVector())
-                    numElements = VectorTypeDim(baseTypeDen->dataType);
-                else if (baseTypeDen->IsMatrix())
+                if (auto initExpr = varDecl->initializer->As<InitializerExpr>())
                 {
-                    auto dims = MatrixTypeDim(baseTypeDen->dataType);
-                    numElements = dims.first * dims.second;
-                }
-
-                if (numElements == (int)initExpr->exprs.size())
-                {
-                    for (int i = 0; i < numElements; i++)
+                    int numElements = 0;
+                    if (baseTypeDen->IsVector())
+                        numElements = VectorTypeDim(baseTypeDen->dataType);
+                    else if (baseTypeDen->IsMatrix())
                     {
-                        if (auto literalExpr = initExpr->exprs[i]->As<LiteralExpr>())
-                        {
-                            auto variant = Variant::ParseFrom(literalExpr->value);
-
-                            switch (literalExpr->dataType)
-                            {
-                            case DataType::Bool:
-                                variant.ToInt();
-                            case DataType::Int:
-                            case DataType::UInt:
-                                varDecl->defaultValue.imatrix[i] = (int)variant.Int();
-                                break;
-                            case DataType::Half:
-                            case DataType::Float:
-                            case DataType::Double:
-                                varDecl->defaultValue.matrix[i] = (float)variant.Real();
-                                break;
-                            default:
-                                break;
-                            }
-                        }
+                        auto dims = MatrixTypeDim(baseTypeDen->dataType);
+                        numElements = dims.first * dims.second;
                     }
 
-                    varDecl->defaultValue.available = true;
+                    if (numElements == (int)initExpr->exprs.size())
+                    {
+                        for (int i = 0; i < numElements; i++)
+                        {
+                            if (auto literalExpr = initExpr->exprs[i]->As<LiteralExpr>())
+                            {
+                                auto variant = Variant::ParseFrom(literalExpr->value);
+
+                                switch (literalExpr->dataType)
+                                {
+                                case DataType::Bool:
+                                    variant.ToInt();
+                                case DataType::Int:
+                                case DataType::UInt:
+                                    varDecl->defaultValue.imatrix[i] = (int)variant.Int();
+                                    break;
+                                case DataType::Half:
+                                case DataType::Float:
+                                case DataType::Double:
+                                    varDecl->defaultValue.matrix[i] = (float)variant.Real();
+                                    break;
+                                default:
+                                    break;
+                                }
+                            }
+                        }
+
+                        varDecl->defaultValue.available = true;
+                    }
                 }
             }
         }
