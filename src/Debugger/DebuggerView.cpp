@@ -572,9 +572,11 @@ void DebuggerView::TranslateInputToOutput()
 
     try
     {
+        Reflection::ReflectionData reflData;
+
         /* Compile shader */
         DebuggerLog log(reportView_);
-        if (Xsc::CompileShader(shaderInput_, shaderOutput_, &log))
+        if (Xsc::CompileShader(shaderInput_, shaderOutput_, &log, &reflData))
         {
             /* Show output */
             outputSourceView_->SetTextAndRefresh(outputSource.str());

@@ -909,6 +909,12 @@ static std::map<std::string, AttributeType> GenerateAttributeTypeMap()
         #ifdef XSC_ENABLE_LANGUAGE_EXT
         { "space",                     T::Space                     },
         { "layout",                    T::Layout                    },
+
+        // BEGIN BANSHEE CHANGES
+        { "color",                     T::Color },
+        { "internal",                  T::Internal },
+
+        // END BANSHEE CHANGES
         #endif
     };
 }
@@ -1134,6 +1140,29 @@ ImageLayoutFormat ExtHLSLKeywordToImageLayoutFormat(const std::string& keyword)
     auto it = typeMap.find(keyword);
     return (it != typeMap.end() ? it->second : ImageLayoutFormat::Undefined);
 }
+
+// BEGIN BANSHEE CHANGES
+
+static std::map<std::string, int> GenerateDefaultTextureMap()
+{
+    using T = DefaultTexture;
+
+    return
+    {
+        { "white",        T::White },
+        { "black",        T::Black },
+        { "normal",       T::Normal },
+    };
+}
+
+int ExtHLSLKeywordToDefaultTexture(const std::string& keyword)
+{
+    static const auto typeMap = GenerateDefaultTextureMap();
+    auto it = typeMap.find(keyword);
+    return (it != typeMap.end() ? it->second : DefaultTexture::Undefined);
+}
+
+// END BANSHEE CHANGES
 
 #endif
 

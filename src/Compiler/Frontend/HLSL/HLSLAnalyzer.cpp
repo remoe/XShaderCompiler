@@ -11,7 +11,7 @@
 #include "Exception.h"
 #include "Helper.h"
 #include "ReportIdents.h"
-
+#include "ConstExprEvaluator.h"
 
 namespace Xsc
 {
@@ -192,6 +192,26 @@ IMPLEMENT_VISIT_PROC(BufferDecl)
     /* Register identifier for buffer */
     Register(ast->ident, ast);
     Visit(ast->arrayDims);
+
+    // BEGIN BANSHEE CHANGES
+    if(ast->initializer)
+    {
+        if(auto objExpr = ast->initializer->As<ObjectExpr>())
+        {
+            const auto& defaultTex = objExpr->ident;
+            auto defaultTexHandle = ExtHLSLKeywordToDefaultTexture(defaultTex);
+            if (defaultTexHandle != DefaultTexture::Undefined)
+            {
+                ast->defaultValue.available = true;
+                ast->defaultValue.handle = defaultTexHandle;
+            }
+            else
+                Error(R_InvalidTextureInitializerValue(defaultTex, ast->ident), ast);
+        }
+        else
+            Error(R_ExpectedIdentInInitializer(ast->ident), ast);
+    }
+    // END BANSHEE CHANGES
 }
 
 IMPLEMENT_VISIT_PROC(SamplerDecl)
@@ -357,6 +377,16 @@ IMPLEMENT_VISIT_PROC(UniformBufferDecl)
         Visit(ast->localStmnts);
     }
     PopUniformBufferDecl();
+
+    // BEGIN BANSHEE CHANGES
+#ifdef XSC_ENABLE_LANGUAGE_EXT
+    for (const auto& attrib : ast->attribs)
+    {
+        if (attrib->attributeType == AttributeType::Internal)
+            ast->extModifiers |= ExtModifiers::Internal;
+    }
+#endif
+    // END BANSHEE CHANGES
 }
 
 IMPLEMENT_VISIT_PROC(VarDeclStmnt)
@@ -723,6 +753,89 @@ void HLSLAnalyzer::AnalyzeVarDeclLocal(VarDecl* varDecl, bool registerVarIdent)
 
         if (varDecl->structDeclRef)
             Error(R_MemberVarsCantHaveDefaultValues(varDecl->ToString()), varDecl->initializer.get());
+
+        // BEGIN BANSHEE CHANGES
+
+        if (auto baseTypeDen = varDecl->GetTypeDenoter()->As<BaseTypeDenoter>())
+        {
+            if (baseTypeDen->IsScalar())
+            {
+                if (auto literalExpr = varDecl->initializer->As<LiteralExpr>())
+                {
+                    auto variant = Variant::ParseFrom(literalExpr->value);
+
+                    switch (literalExpr->dataType)
+                    {
+                    case DataType::Bool:
+                        varDecl->defaultValue.boolean = variant.Bool();
+                        varDecl->defaultValue.available = true;
+                        break;
+                    case DataType::Int:
+                        varDecl->defaultValue.integer = (int)variant.Int();
+                        varDecl->defaultValue.available = true;
+                        break;
+                    case DataType::UInt:
+                        varDecl->defaultValue.integer = (int)variant.Int();
+                        varDecl->defaultValue.available = true;
+                        break;
+                    case DataType::Half:
+                    case DataType::Float:
+                    case DataType::Double:
+                        varDecl->defaultValue.real = (float)variant.Real();
+                        varDecl->defaultValue.available = true;
+                        break;
+                    default:
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                if (auto initExpr = varDecl->initializer->As<InitializerExpr>())
+                {
+                    int numElements = 0;
+                    if (baseTypeDen->IsVector())
+                        numElements = VectorTypeDim(baseTypeDen->dataType);
+                    else if (baseTypeDen->IsMatrix())
+                    {
+                        auto dims = MatrixTypeDim(baseTypeDen->dataType);
+                        numElements = dims.first * dims.second;
+                    }
+
+                    if (numElements == (int)initExpr->exprs.size())
+                    {
+                        for (int i = 0; i < numElements; i++)
+                        {
+                            if (auto literalExpr = initExpr->exprs[i]->As<LiteralExpr>())
+                            {
+                                auto variant = Variant::ParseFrom(literalExpr->value);
+
+                                switch (literalExpr->dataType)
+                                {
+                                case DataType::Bool:
+                                    variant.ToInt();
+                                case DataType::Int:
+                                case DataType::UInt:
+                                    varDecl->defaultValue.imatrix[i] = (int)variant.Int();
+                                    break;
+                                case DataType::Half:
+                                case DataType::Float:
+                                case DataType::Double:
+                                    varDecl->defaultValue.matrix[i] = (float)variant.Real();
+                                    break;
+                                default:
+                                    break;
+                                }
+                            }
+                        }
+
+                        varDecl->defaultValue.available = true;
+                    }
+                }
+            }
+        }
+
+        // END BANSHEE CHANGES
     }
 }
 
@@ -2299,6 +2412,14 @@ void HLSLAnalyzer::AnalyzeExtAttributes(std::vector<AttributePtr>& attribs, cons
             }
             break;
 
+            // BEGIN BANSHEE CHANGES
+            case AttributeType::Color:
+            case AttributeType::Internal:
+                AnalyzeAttributeModifier(attrib.get(), typeDen);
+            break;
+
+            // END BANSHEE CHANGES
+
             default:
             {
                 /* Ignore other attributes here */
@@ -2439,7 +2560,32 @@ void HLSLAnalyzer::AnalyzeVectorSpaceAssign(
     }
 }
 
-#endif // XSC_ENABLE_LANGUAGE_EXT
+// BEGIN BANSHEE CHANGES
+
+void HLSLAnalyzer::AnalyzeAttributeModifier(Attribute* attrib, const TypeDenoterPtr& typeDen)
+{
+    if (AnalyzeNumArgsAttribute(attrib, 0, true))
+    {
+        if (auto bufferTypeDen = typeDen->As<BufferTypeDenoter>())
+        {
+            if (attrib->attributeType == AttributeType::Color)
+                bufferTypeDen->extModifiers |= ExtModifiers::Color;
+            else if (attrib->attributeType == AttributeType::Internal)
+                bufferTypeDen->extModifiers |= ExtModifiers::Internal;
+        }
+        else if(auto baseTypeDen = typeDen->As<BaseTypeDenoter>())
+        {
+            if (attrib->attributeType == AttributeType::Color)
+                baseTypeDen->extModifiers |= ExtModifiers::Color;
+            else if (attrib->attributeType == AttributeType::Internal)
+                baseTypeDen->extModifiers |= ExtModifiers::Internal;
+        }
+    }
+}
+
+// END BANSHEE CHANGES
+
+#endif
 
 /* ----- Misc ----- */
 

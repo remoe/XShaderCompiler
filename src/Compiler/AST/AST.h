@@ -558,6 +558,10 @@ struct VarDecl : public Decl
     UniformBufferDecl*              bufferDeclRef       = nullptr;  // Reference to its uniform buffer declaration (optional parent-parent-node); may be null
     StructDecl*                     structDeclRef       = nullptr;  // Reference to its owner structure declaration (optional parent-parent-node); may be null
     VarDecl*                        staticMemberVarRef  = nullptr;  // Bi-directional reference to its static variable declaration or definition; may be null
+
+    // BEGIN BANSHEE CHANGES
+    DefaultValue                    defaultValue;
+    // END BANSHEE CHANGES
 };
 
 // Buffer declaration.
@@ -581,6 +585,11 @@ struct BufferDecl : public Decl
     std::vector<VarDeclStmntPtr>    annotations;                // Annotations can be ignored by analyzers and generators.
 
     BufferDeclStmnt*                declStmntRef    = nullptr;  // Reference to its declaration statement (parent node).
+
+    // BEGIN BANSHEE CHANGES
+    ExprPtr                         initializer;
+    DefaultValue                    defaultValue;
+    // END BANSHEE CHANGES
 };
 
 // Sampler state declaration.
@@ -812,6 +821,10 @@ struct UniformBufferDecl : public Stmnt
 
     std::vector<VarDeclStmntPtr>    varMembers;                                         // List of all member variable declaration statements.
     TypeModifier                    commonStorageLayout = TypeModifier::ColumnMajor;    // 
+
+    // BEGIN BANSHEE CHANGES
+    int             extModifiers = 0;
+    // END BANSHEE CHANGES
 };
 
 // Buffer (and texture) declaration.

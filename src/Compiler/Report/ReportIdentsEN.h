@@ -502,6 +502,13 @@ DECL_REPORT( IllegalVectorSpaceAssignment,      "illegal assignment of '{0}' vec
 DECL_REPORT( InconsistVectorSpacesInTypes,      "inconsistent vector-spaces between type denoters[ (found '{0}' and '{1}')]"                                    );
 DECL_REPORT( ExpectedIdentInSpaceAttr,          "expected identifier as argument in 'space' attribute"                                                          );
 
+// BEGIN BANSHEE CHANGES
+
+DECL_REPORT( ExpectedIdentInInitializer,        "expected identifier as initializer for object '{0}'");
+DECL_REPORT( InvalidTextureInitializerValue,    "invalid value '{0}' provided as initializer for texture '{1}'");
+
+// END BANSHEE CHANGES
+
 #endif
 
 

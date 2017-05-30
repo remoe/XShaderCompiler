@@ -213,6 +213,10 @@ class HLSLAnalyzer : public Analyzer
             bool swapAssignOrder = false
         );
 
+        // BEGIN BANSHEE CHANGES
+        void AnalyzeAttributeModifier(Attribute* attrib, const TypeDenoterPtr& typeDen);
+        // END BANSHEE CHANGES
+
         #endif
 
         /* ----- Misc ----- */

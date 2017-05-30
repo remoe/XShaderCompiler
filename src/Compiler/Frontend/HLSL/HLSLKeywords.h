@@ -68,6 +68,10 @@ IndexedSemantic HLSLKeywordToSemantic(const std::string& ident, bool useD3D10Sem
 // Maps a keyword from "layout" attribute extension into an image layout format or returns ImageLayoutFormat::Undefined.
 ImageLayoutFormat ExtHLSLKeywordToImageLayoutFormat(const std::string& keyword);
 
+// BEGIN BANSHEE CHANGES
+int ExtHLSLKeywordToDefaultTexture(const std::string& keyword);
+// END BANSHEE CHANGES
+
 #endif
 
 

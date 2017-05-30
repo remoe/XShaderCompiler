@@ -625,6 +625,11 @@ enum class AttributeType
     Space,
     Layout,
 
+    // BEGIN BANSHEE CHANGES
+    Color,
+    Internal,
+    // END BANSHEE CHANGES
+
     #endif
 };
 
@@ -1103,6 +1108,19 @@ Reflection::TextureAddressMode StringToTexAddressMode(const std::string& s);
 std::string CompareFuncToString(const Reflection::ComparisonFunc t);
 Reflection::ComparisonFunc StringToCompareFunc(const std::string& s);
 
+// BEGIN BANSHEE CHANGES
+struct DefaultTexture
+{
+    enum Type
+    {
+        Undefined,
+
+        White,
+        Black,
+        Normal
+    };
+};
+// END BANSHEE CHANGES
 
 } // /namespace Xsc
 

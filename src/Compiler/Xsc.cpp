@@ -199,8 +199,10 @@ static bool CompileShaderPrimary(
         generatorResult = generator.GenerateCode(*program, inputDesc, outputDesc, log);
     }
 
-    if (!generatorResult)
-        return SubmitError(R_GeneratingOutputCodeFailed);
+    // BEGIN BANSHEE CHANGES
+    //if (!generatorResult)
+    //    return SubmitError(R_GeneratingOutputCodeFailed);
+    // END BANSHEE CHANGES
 
     /* ----- Code reflection ----- */
 
@@ -214,6 +216,11 @@ static bool CompileShaderPrimary(
             ((inputDesc.warnings & Warnings::CodeReflection) != 0)
         );
     }
+
+    // BEGIN BANSHEE CHANGES
+    if (!generatorResult)
+        return SubmitError(R_GeneratingOutputCodeFailed);
+    // END BANSHEE CHANGES
 
     return true;
 }
