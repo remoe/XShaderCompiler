@@ -233,6 +233,23 @@ enum class DataType
     Double4x4,
 };
 
+// Container structure for all kinds of matrix subscript usages.
+struct MatrixSubscriptUsage
+{
+    MatrixSubscriptUsage() = default;
+    MatrixSubscriptUsage(const DataType dataTypeIn, const std::string& subscript);
+
+    // Strict-weak-order (SWP) comparison.
+    bool operator < (const MatrixSubscriptUsage& rhs) const;
+
+    // Returns the indices to a unique string.
+    std::string IndicesToString() const;
+
+    std::vector<std::pair<int, int>>    indices;
+    DataType                            dataTypeIn  = DataType::Undefined;
+    DataType                            dataTypeOut = DataType::Undefined;
+};
+
 // Returns a descriptive string of the specified data type.
 std::string DataTypeToString(const DataType t, bool useTemplateSyntax = false);
 
@@ -288,7 +305,7 @@ DataType VectorDataType(const DataType baseDataType, int vectorSize);
 DataType MatrixDataType(const DataType baseDataType, int rows, int columns);
 
 // Returns the data type for the specified swizzle operator or throws and std::invalid_argument on failure.
-DataType SubscriptDataType(const DataType dataType, const std::string& subscript);
+DataType SubscriptDataType(const DataType dataType, const std::string& subscript, std::vector<std::pair<int, int>>* indices = nullptr);
 
 // Returns the data type for the specified literal token (BoolLiteral, IntLiteral, FloatLiteral, and StringLiteral).
 DataType TokenToDataType(const Token& tkn);
@@ -343,7 +360,7 @@ enum class InterpModifier
 };
 
 
-/* ----- StorageClass Enum ----- */
+/* ----- TypeModifier Enum ----- */
 
 // Variable type modifier enumeration.
 enum class TypeModifier
@@ -417,16 +434,14 @@ enum class BufferType
     TriangleStream,
 };
 
+// Converts the specified BufferType enumeration entry into a string.
 std::string BufferTypeToString(const BufferType t);
 
 // Returns true if the specified buffer type is a storage buffer type (i.e. gets converted to a 'buffer' block in GLSL).
 bool IsStorageBufferType(const BufferType t);
 
-// Returns true if the specified buffer type is a RW (read/write) buffer type.
+// Returns true if the specified buffer type is a RW (read/write) buffer type (for storage buffers and textures).
 bool IsRWBufferType(const BufferType t);
-
-// Returns true if the specified buffer type is a RW (read/write) texture buffer type (represented in GLSL with 'image...').
-bool IsRWTextureBufferType(const BufferType t);
 
 // Returns true if the specified buffer type is a texture buffer.
 bool IsTextureBufferType(const BufferType t);
@@ -434,11 +449,20 @@ bool IsTextureBufferType(const BufferType t);
 // Returns true if the specified buffer type is a multi-sampled texture buffer (i.e. Texture2DMS or Texture2DMSArray).
 bool IsTextureMSBufferType(const BufferType t);
 
+// Returns true if the specified buffer type is an image buffer (i.e. gets converted to an 'imageBuffer' in GLSL).
+bool IsImageBufferType(const BufferType t);
+
+// Returns true if the specified buffer type is a RW (read/write) texture buffer type (represented in GLSL with 'image...').
+bool IsRWImageBufferType(const BufferType t);
+
 // Returns true if the specified buffer type is an input or output patch.
 bool IsPatchBufferType(const BufferType t);
 
 // Returns true if the specified buffer type is either a point-, line-, or triangle stream.
 bool IsStreamBufferType(const BufferType t);
+
+// Returns the texture dimension of the specified buffer type in the range [1, 4] or 0 if the type is not a texture type.
+int GetBufferTypeTextureDim(const BufferType t);
 
 
 /* ----- SamplerType Enum ----- */
@@ -449,30 +473,30 @@ enum class SamplerType
     Undefined,
 
     /* --- Samplers --- */
-                            // HLSL3            GLSL
-                            // ---------------  ----------------------
-    Sampler1D,              // sampler1D        sampler1D
-    Sampler2D,              // sampler2D        sampler2D
-    Sampler3D,              // sampler3D        sampler3D
-    SamplerCube,            // samplerCUBE      samplerCube
-    Sampler2DRect,          // n/a              sampler2DRect
-    Sampler1DArray,         // n/a              sampler1DArray
-    Sampler2DArray,         // n/a              sampler2DArray
-    SamplerCubeArray,       // n/a              samplerCubeArray
-    SamplerBuffer,          // n/a              samplerBuffer
-    Sampler2DMS,            // n/a              sampler2DMS
-    Sampler2DMSArray,       // n/a              sampler2DMSArray
-    Sampler1DShadow,        // sampler1DShadow  sampler1DShadow
-    Sampler2DShadow,        // sampler2DShadow  sampler2DShadow
-    SamplerCubeShadow,      // n/a              samplerCubeShadow
-    Sampler2DRectShadow,    // n/a              sampler2DRectShadow
-    Sampler1DArrayShadow,   // n/a              sampler1DArrayShadow
-    Sampler2DArrayShadow,   // n/a              sampler2DArrayShadow
-    SamplerCubeArrayShadow, // n/a              samplerCubeArrayShadow
+                            // HLSL3            HLSL4+                  GLSL
+                            // ---------------  ----------------------  ----------------------
+    Sampler1D,              // sampler1D        n/a                     sampler1D
+    Sampler2D,              // sampler2D        n/a                     sampler2D
+    Sampler3D,              // sampler3D        n/a                     sampler3D
+    SamplerCube,            // samplerCUBE      n/a                     samplerCube
+    Sampler2DRect,          // n/a              n/a                     sampler2DRect
+    Sampler1DArray,         // n/a              n/a                     sampler1DArray
+    Sampler2DArray,         // n/a              n/a                     sampler2DArray
+    SamplerCubeArray,       // n/a              n/a                     samplerCubeArray
+    SamplerBuffer,          // n/a              n/a                     samplerBuffer
+    Sampler2DMS,            // n/a              n/a                     sampler2DMS
+    Sampler2DMSArray,       // n/a              n/a                     sampler2DMSArray
+    Sampler1DShadow,        // sampler1DShadow  n/a                     sampler1DShadow
+    Sampler2DShadow,        // sampler2DShadow  n/a                     sampler2DShadow
+    SamplerCubeShadow,      // n/a              n/a                     samplerCubeShadow
+    Sampler2DRectShadow,    // n/a              n/a                     sampler2DRectShadow
+    Sampler1DArrayShadow,   // n/a              n/a                     sampler1DArrayShadow
+    Sampler2DArrayShadow,   // n/a              n/a                     sampler2DArrayShadow
+    SamplerCubeArrayShadow, // n/a              n/a                     samplerCubeArrayShadow
 
     /* --- Sampler states --- */
                             // HLSL3            HLSL4+                  GLSL
-                            // ---------------  ----------------------  -------
+                            // ---------------  ----------------------  ----------------------
     SamplerState,           // sampler_state    SamplerState            sampler
     SamplerComparisonState, // sampler_state    SamplerComparisonState  samplerShadow
 };
@@ -485,6 +509,9 @@ bool IsSamplerTypeShadow(const SamplerType t);
 
 // Returns true if the specified sampler type is an array sampler (e.g. Sampler1DArray).
 bool IsSamplerTypeArray(const SamplerType t);
+
+// Returns the texture dimension of the specified sampler type in the range [1, 4] or 0 if the type is not a texture sampler (e.g. a sampler state).
+int GetSamplerTypeTextureDim(const SamplerType t);
 
 // Maps a texture type to an appropriate sampler type.
 SamplerType TextureTypeToSamplerType(const BufferType t);
@@ -552,6 +579,9 @@ enum class ImageLayoutFormat
 
 // Returns the base type of a single component in the specified image layout format.
 DataType GetImageLayoutFormatBaseType(const ImageLayoutFormat format);
+
+// Returns the image layout format for the specified data type or ImageLayoutFormat::Undefined.
+ImageLayoutFormat DataTypeToImageLayoutFormat(const DataType t);
 
 
 /* ----- RegisterType Enum ----- */
@@ -833,9 +863,35 @@ enum class Intrinsic
     Trunc,
 
     Texture_GetDimensions,
+    Texture_QueryLod,           // CalculateLevelOfDetail(SamplerState S, float[1,2,3] Location)
+    Texture_QueryLodUnclamped,  // CalculateLevelOfDetailUnclamped(SamplerState S, float[1,2,3] Location)
+
     Texture_Load_1,             // Load(int[1,2,3,4] Location)
     Texture_Load_2,             // Load(int[1,2,3,4] Location, int SampleIndex)
     Texture_Load_3,             // Load(int[1,2,3,4] Location, int SampleIndex, int Offset)
+
+    Texture_Sample_2,           // Sample(SamplerState S, float[1,2,3,4] Location)
+    Texture_Sample_3,           // Sample(SamplerState S, float[1,2,3,4] Location, int[1,2,3] Offset)
+    Texture_Sample_4,           // Sample(SamplerState S, float[1,2,3,4] Location, int[1,2,3] Offset, float Clamp)
+    Texture_Sample_5,           // Sample(SamplerState S, float[1,2,3,4] Location, int[1,2,3] Offset, float Clamp, out uint Status)
+    Texture_SampleBias_3,
+    Texture_SampleBias_4,
+    Texture_SampleBias_5,
+    Texture_SampleBias_6,
+    Texture_SampleCmp_3,
+    Texture_SampleCmp_4,
+    Texture_SampleCmp_5,
+    Texture_SampleCmp_6,
+    Texture_SampleCmpLevelZero_3,
+    Texture_SampleCmpLevelZero_4,
+    Texture_SampleCmpLevelZero_5,
+    Texture_SampleGrad_4,
+    Texture_SampleGrad_5,
+    Texture_SampleGrad_6,
+    Texture_SampleGrad_7,
+    Texture_SampleLevel_3,      // SampleLevel(SamplerState S, float[1,2,3,4] Location, float LOD)
+    Texture_SampleLevel_4,      // SampleLevel(SamplerState S, float[1,2,3,4] Location, float LOD, int[1,2,3] Offset)
+    Texture_SampleLevel_5,      // SampleLevel(SamplerState S, float[1,2,3,4] Location, float LOD, int[1,2,3] Offset, out uint Status)
 
     Texture_Gather_2,           // Gather(SamplerState S, float[2,3,4] Location)
     Texture_GatherRed_2,        // GatherRed(SamplerState S, float[2,3,4] Location)
@@ -889,28 +945,6 @@ enum class Intrinsic
     Texture_GatherCmpAlpha_7,   // GatherCmpAlpha(SamplerComparisonState S, float[2,3] Location, float CompareValue, int2 Offset1, int2 Offset2, int2 Offset3, int2 Offset4)
     Texture_GatherCmpAlpha_8,   // GatherCmpAlpha(SamplerComparisonState S, float[2,3] Location, float CompareValue, int2 Offset1, int2 Offset2, int2 Offset3, int2 Offset4, out uint Status)
 
-    Texture_Sample_2,           // Sample(SamplerState S, float[1,2,3,4] Location)
-    Texture_Sample_3,           // Sample(SamplerState S, float[1,2,3,4] Location, int[1,2,3] Offset)
-    Texture_Sample_4,           // Sample(SamplerState S, float[1,2,3,4] Location, int[1,2,3] Offset, float Clamp)
-    Texture_Sample_5,           // Sample(SamplerState S, float[1,2,3,4] Location, int[1,2,3] Offset, float Clamp, out uint Status)
-    Texture_SampleBias_3,
-    Texture_SampleBias_4,
-    Texture_SampleBias_5,
-    Texture_SampleBias_6,
-    Texture_SampleCmp_3,
-    Texture_SampleCmp_4,
-    Texture_SampleCmp_5,
-    Texture_SampleCmp_6,
-    Texture_SampleGrad_4,
-    Texture_SampleGrad_5,
-    Texture_SampleGrad_6,
-    Texture_SampleGrad_7,
-    Texture_SampleLevel_3,      // SampleLevel(SamplerState S, float[1,2,3,4] Location, float LOD)
-    Texture_SampleLevel_4,      // SampleLevel(SamplerState S, float[1,2,3,4] Location, float LOD, int[1,2,3] Offset)
-    Texture_SampleLevel_5,      // SampleLevel(SamplerState S, float[1,2,3,4] Location, float LOD, int[1,2,3] Offset, out uint Status)
-    Texture_QueryLod,           // CalculateLevelOfDetail(SamplerState S, float[1,2,3] Location)
-    Texture_QueryLodUnclamped,  // CalculateLevelOfDetailUnclamped(SamplerState S, float[1,2,3] Location)
-
     StreamOutput_Append,        // Append(StreamDataType)
     StreamOutput_RestartStrip,  // RestartStrip()
 
@@ -926,7 +960,7 @@ enum class Intrinsic
     Image_AtomicExchange        // GLSL only
 };
 
-// Container structure for all kinds of intrinsic call usages (can be used as std::map<Intrinsic, IntrinsicUsage>
+// Container structure for all kinds of intrinsic call usages (can be used as std::map<Intrinsic, IntrinsicUsage>).
 struct IntrinsicUsage
 {
     struct ArgumentList
@@ -946,10 +980,25 @@ struct IntrinsicUsage
 // Returns true if the specified intrinsic is a global intrinsic.
 bool IsGlobalIntrinsic(const Intrinsic t);
 
-// Returns true if the speciifed intrinsic belongs to a texture object.
+// Returns true if the specified intrinsic belongs to a texture object.
 bool IsTextureIntrinsic(const Intrinsic t);
 
-// Returns true if the speciifed intrinsic belongs to a stream-output object.
+// Returns true if the specified intrinsic is a texture gather intrinsic.
+bool IsTextureGatherIntrisic(const Intrinsic t);
+
+// Returns true if the specified intrinsic is a texture sample intrinsic.
+bool IsTextureSampleIntrinsic(const Intrinsic t);
+
+// Returns true if the specified intrinsic is a texture sample or gather intrisic, with a compare operation.
+bool IsTextureCompareIntrinsic(const Intrinsic t);
+
+// Returns true if the specified intrinsic is a texture sample compare intrinsic that only samples the first mip level.
+bool IsTextureCompareLevelZeroIntrinsic(const Intrinsic t);
+
+// Returns true if the specified intrinsic is a texture load intrisic (e.g. Texture_Load1).
+bool IsTextureLoadIntrinsic(const Intrinsic t);
+
+// Returns true if the specified intrinsic belongs to a stream-output object.
 bool IsStreamOutputIntrinsic(const Intrinsic t);
 
 // Returns true if the specified intrinsic is an image load/store intrinsic.
@@ -957,21 +1006,6 @@ bool IsImageIntrinsic(const Intrinsic t);
 
 // Returns true if the specified intrinsic in an interlocked intrinsic (e.g. Intrinsic::InterlockedAdd).
 bool IsInterlockedIntristic(const Intrinsic t);
-
-// Returns true if the specified intrinsic is a texture gather intrinsic.
-bool IsGatherIntrisic(const Intrinsic t);
-
-// Returns the number of offset parameters accepted by the specified gather intrinsic.
-int GetGatherIntrinsicOffsetParamCount(const Intrinsic t);
-
-// Maps a texture gather intrinsic to a component index (e.g. red -> 0, green -> 1, etc.)
-int GetGatherIntrinsicComponentIndex(const Intrinsic t);
-
-// Returns true if the specified intrinsic is a texture sample or gather intrisic, with a compare operation.
-bool IsTextureCompareIntrinsic(const Intrinsic t);
-
-// Returns true if the specified intrinsic is a texture load intrisic (e.g. Texture_Load1).
-bool IsTextureLoadIntrinsic(const Intrinsic t);
 
 // Returns the respective intrinsic for the specified binary compare operator, or Intrinsic::Undefined if the operator is not a compare operator.
 Intrinsic CompareOpToIntrinsic(const BinaryOp op);
@@ -981,6 +1015,12 @@ Returns the respecitve image atomic intrinsic for the specified interlocked intr
 or the input intrinsic, if is is not an interlocked intrinsic (e.g. Intrinsic::InterlockedAdd to Intrinsic::Image_AtomicAdd).
 */
 Intrinsic InterlockedToImageAtomicIntrinsic(const Intrinsic t);
+
+// Returns the number of offset parameters accepted by the specified gather intrinsic.
+int GetGatherIntrinsicOffsetParamCount(const Intrinsic t);
+
+// Maps a texture gather intrinsic to a component index (e.g. red -> 0, green -> 1, etc.)
+int GetGatherIntrinsicComponentIndex(const Intrinsic t);
 
 
 /* ----- Semantic Enum ----- */
@@ -1004,7 +1044,7 @@ enum class Semantic
     DomainLocation,         // n/a       SV_DomainLocation          gl_TessCoord
     FragCoord,              // VPOS      SV_Position                gl_FragCoord
     GroupID,                // n/a       SV_GroupID                 gl_WorkGroupID
-    GroupIndex,             // n/a       SV_GroupIndex              n/a
+    GroupIndex,             // n/a       SV_GroupIndex              gl_LocalInvocationIndex
     GroupThreadID,          // n/a       SV_GroupThreadID           gl_LocalInvocationID
     GSInstanceID,           // n/a       SV_GSInstanceID            gl_InvocationID
   //HelperInvocation,       // n/a       n/a                        gl_HelperInvocation
@@ -1023,6 +1063,8 @@ enum class Semantic
     VertexID,               // n/a       SV_VertexID                gl_VertexID (OpenGL)/ gl_VertexIndex (Vulkan)
     VertexPosition,         // POSITION  SV_Position                gl_Position
     ViewportArrayIndex,     // n/a       SV_ViewportArrayIndex      gl_ViewportIndex
+  //NumWorkGroups,          // n/a       n/a                        gl_NumWorkGroups
+  //WorkGroupSize,          // n/a       n/a                        gl_WorkGroupSize
 };
 
 // Indexed semantic type with 'Semantic' enum, integral index, and implicit conversion from and to 'Semantic' enum.

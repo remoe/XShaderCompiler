@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <iterator>
 #include <functional>
+#include <iomanip>
 #include <cctype>
 
 
@@ -245,7 +246,42 @@ void MergeString(std::basic_string<T>& dst, const std::basic_string<T>& src, con
 
     /* Append remaining characters to destination string */
     if (i < nSrc)
-        dst.append(src, i);
+        dst.append(src.substr(i));
+}
+
+// Returns a hexa-decimal string of the specified integral value.
+template <typename T>
+std::string ToHexString(const T& i, const std::string& prefix = "0x")
+{
+    std::stringstream s;
+    s << prefix << std::setfill('0') << std::setw(sizeof(T)*2) << std::hex << i;
+    return s.str();
+}
+
+// Returns the number of digits of the specified integral type.
+template <typename T>
+int NumDigits(T n)
+{
+    static_assert(std::is_integral<T>::value, "NumDigits template only allows integral types");
+    
+    int digits = (n < 0 ? 1 : 0);
+
+    while (n != 0)
+    {
+        n /= 10;
+        ++digits;
+    }
+
+    return digits;
+}
+
+// Equivalent to C++14's 'std::exchange(ptr, nullptr)'.
+template <typename T>
+std::shared_ptr<T> ExchangeWithNull(std::shared_ptr<T>& ptr)
+{
+    auto result = ptr;
+    ptr.reset();
+    return result;
 }
 
 

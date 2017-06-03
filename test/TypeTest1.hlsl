@@ -73,11 +73,11 @@ S1_t1_a f3()
 static const int g_2 = 5;
 float g_1 = 0.0;
 
-const struct { struct { float inner2; } inner1; } g_anomym_s1;
+const struct { struct { int inner2; } inner1; } g_anomym_s1;
 
 struct { float x; } f4()
 {
-	//return (struct { float x; })0;
+	return (struct { float x; })0;
 }
 
 S1_t1_a f5(int x);
@@ -103,17 +103,17 @@ float4 VS() : SV_Position
 	
 	DWORD x = 0;
 	FLOAT x1 = 0;
-	S1_t2 x2 = 0;
+	S1_t2 x2 = (S1_t2)0;
 	S1_t2_a x3;
 	S1_t2_a_3 x4;
 	S1_t2_a_3 x5[1];
 //	return VECTOR(v0 + f1(), 1);
-	return float4(v0 + f1(), 1);
+	return float4(v0 * f1()._11);
 }
 
 S1_t1_a f5(int x)
 {
-    S1_t1_a y = { x, 1, 2, 3, 4 };
+    S1_t1_a y = (S1_t1_a)0;//{ x, 1, 2, 3, 4 };
     return y;
 }
 

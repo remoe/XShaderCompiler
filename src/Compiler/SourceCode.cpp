@@ -14,7 +14,7 @@ namespace Xsc
 
 
 SourceCode::SourceCode(const std::shared_ptr<std::istream>& stream) :
-    stream_{ stream }
+    stream_ { stream }
 {
 }
 
@@ -68,7 +68,7 @@ static bool BuildLineMarker(
     /* Construct the space offset */
     markerOut = std::string(area.Pos().Column() - 1, ' ');
 
-    for (size_t i = 0, n = markerOut.size(); i < n; ++i)
+    for (std::size_t i = 0, n = markerOut.size(); i < n; ++i)
     {
         if (lineIn[i] == '\t')
             markerOut[i] = '\t';

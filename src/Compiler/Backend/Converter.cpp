@@ -8,6 +8,7 @@
 #include "Converter.h"
 #include "AST.h"
 #include "ASTFactory.h"
+#include "Helper.h"
 #include "ReportIdents.h"
 #include <algorithm>
 
@@ -46,6 +47,11 @@ void Converter::CloseScope()
 void Converter::Register(const std::string& ident)
 {
     symTable_.Register(ident, true);
+}
+
+bool Converter::Fetch(const std::string& ident) const
+{
+    return symTable_.Fetch(ident);
 }
 
 bool Converter::FetchFromCurrentScope(const std::string& ident) const
@@ -127,14 +133,57 @@ void Converter::VisitScopedStmntList(std::vector<StmntPtr>& stmntList, void* arg
     VisitScopedStmntsFromHandler({ stmntList }, args);
 }
 
-void Converter::InsertStmntBefore(const StmntPtr& stmnt)
+void Converter::InsertStmntBefore(const StmntPtr& stmnt, bool globalScope)
 {
-    ActiveStmntScopeHandler().InsertStmntBefore(stmnt);
+    if (globalScope)
+        stmntScopeHandlerGlobalRef_->InsertStmntBefore(stmnt);
+    else
+        ActiveStmntScopeHandler().InsertStmntBefore(stmnt);
 }
 
-void Converter::InsertStmntAfter(const StmntPtr& stmnt)
+void Converter::InsertStmntAfter(const StmntPtr& stmnt, bool globalScope)
 {
-    ActiveStmntScopeHandler().InsertStmntAfter(stmnt);
+    if (globalScope)
+        stmntScopeHandlerGlobalRef_->InsertStmntAfter(stmnt);
+    else
+        ActiveStmntScopeHandler().InsertStmntAfter(stmnt);
+}
+
+void Converter::MoveNestedStructDecls(std::vector<StmntPtr>& localStmnts, bool globalScope)
+{
+    for (auto it = localStmnts.begin(); it != localStmnts.end();)
+    {
+        if (auto varDeclStmnt = (*it)->As<VarDeclStmnt>())
+        {
+            /* Does the variable declaration has a nested structure declaration? */
+            if (varDeclStmnt->typeSpecifier->structDecl != nullptr)
+            {
+                /* Make global structure declaration statement */
+                auto structDeclStmnt = ASTFactory::MakeStructDeclStmnt(
+                    ExchangeWithNull(varDeclStmnt->typeSpecifier->structDecl)
+                );
+
+                /* Insert the new statement */
+                InsertStmntBefore(structDeclStmnt, globalScope);
+            }
+        }
+        else if (auto basicDeclStmnt = (*it)->As<BasicDeclStmnt>())
+        {
+            if (basicDeclStmnt->declObject->Type() == AST::Types::StructDecl)
+            {
+                /* Move entire statement to the upper scope */
+                InsertStmntBefore(*it, globalScope);
+
+                /* Remove statement from the list */
+                it = localStmnts.erase(it);
+
+                continue;
+            }
+        }
+
+        /* Next statement */
+        ++it;
+    }
 }
 
 /* ----- Misc ----- */
@@ -187,16 +236,24 @@ std::string Converter::MakeTempVarIdent()
 
 void Converter::VisitScopedStmntsFromHandler(const StmntScopeHandler& handler, void* args)
 {
+    /* Push scope handler onto stack */
     stmntScopeHandlerStack_.push(handler);
-    {
-        /* Use active scope handler */
-        auto& activeHandler = ActiveStmntScopeHandler();
+    
+    if (!stmntScopeHandlerGlobalRef_)
+        stmntScopeHandlerGlobalRef_ = &(stmntScopeHandlerStack_.top());
 
-        /* Visit all statements from the scope handler */
-        while (auto stmnt = activeHandler.Next())
-            Visit(stmnt, args);
-    }
+    /* Use active scope handler */
+    auto& activeHandler = ActiveStmntScopeHandler();
+
+    /* Visit all statements from the scope handler */
+    while (auto stmnt = activeHandler.Next())
+        Visit(stmnt, args);
+    
+    /* Pop scope handler from stack */
     stmntScopeHandlerStack_.pop();
+
+    if (stmntScopeHandlerStack_.empty())
+        stmntScopeHandlerGlobalRef_ = nullptr;
 }
 
 Converter::StmntScopeHandler& Converter::ActiveStmntScopeHandler()

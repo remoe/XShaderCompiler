@@ -54,19 +54,9 @@ CallExprPtr MakeTextureSamplerBindingCallExpr(const ExprPtr& textureObjectExpr, 
         const auto& typeDen = textureObjectExpr->GetTypeDenoter()->GetAliased();
         if (auto bufferTypeDen = typeDen.As<BufferTypeDenoter>())
         {
-            ast->typeDenoter = std::make_shared<SamplerTypeDenoter>(TextureTypeToSamplerType(bufferTypeDen->bufferType));
-            ast->arguments.push_back(textureObjectExpr);
-            ast->arguments.push_back(samplerObjectExpr);
+            ast->typeDenoter    = std::make_shared<SamplerTypeDenoter>(TextureTypeToSamplerType(bufferTypeDen->bufferType));
+            ast->arguments      = { textureObjectExpr, samplerObjectExpr };
         }
-    }
-    return ast;
-}
-
-InitializerExprPtr MakeInitializerExpr(const std::vector<ExprPtr>& exprs)
-{
-    auto ast = MakeAST<InitializerExpr>();
-    {
-        ast->exprs = exprs;
     }
     return ast;
 }
@@ -77,6 +67,27 @@ CallExprPtr MakeTypeCtorCallExpr(const TypeDenoterPtr& typeDenoter, const std::v
     {
         ast->typeDenoter    = typeDenoter;
         ast->arguments      = arguments;
+    }
+    return ast;
+}
+
+CallExprPtr MakeWrapperCallExpr(const std::string& funcIdent, const TypeDenoterPtr& typeDenoter, const std::vector<ExprPtr>& arguments)
+{
+    auto ast = MakeAST<CallExpr>();
+    {
+        ast->ident          = funcIdent;
+        ast->typeDenoter    = typeDenoter;
+        ast->arguments      = arguments;
+        ast->flags << CallExpr::isWrapperCall;
+    }
+    return ast;
+}
+
+InitializerExprPtr MakeInitializerExpr(const std::vector<ExprPtr>& exprs)
+{
+    auto ast = MakeAST<InitializerExpr>();
+    {
+        ast->exprs = exprs;
     }
     return ast;
 }
@@ -118,7 +129,7 @@ LiteralExprPtr MakeLiteralExpr(const DataType literalType, const std::string& li
     return ast;
 }
 
-LiteralExprPtr MakeLiteralExpr(const Variant& literalValue)
+LiteralExprPtr MakeLiteralExprOrNull(const Variant& literalValue)
 {
     switch (literalValue.Type())
     {
@@ -128,8 +139,9 @@ LiteralExprPtr MakeLiteralExpr(const Variant& literalValue)
             return MakeLiteralExpr(DataType::Int, std::to_string(literalValue.Int()));
         case Variant::Types::Real:
             return MakeLiteralExpr(DataType::Float, std::to_string(literalValue.Real()));
+        default:
+            return nullptr;
     }
-    return MakeLiteralExpr(DataType::Int, "0");
 }
 
 AliasDeclStmntPtr MakeBaseTypeAlias(const DataType dataType, const std::string& ident)
@@ -194,6 +206,26 @@ VarDeclStmntPtr MakeVarDeclStmnt(const DataType dataType, const std::string& ide
     return MakeVarDeclStmnt(MakeTypeSpecifier(dataType), ident, initializer);
 }
 
+VarDeclStmntPtr MakeVarDeclStmntSplit(const VarDeclStmntPtr& varDeclStmnt, std::size_t idx)
+{
+    if (varDeclStmnt->varDecls.size() >= 2 && idx < varDeclStmnt->varDecls.size())
+    {
+        /* Move VarDecl out of statement */
+        auto varDecl = varDeclStmnt->varDecls[idx];
+        varDeclStmnt->varDecls.erase(varDeclStmnt->varDecls.begin() + idx);
+
+        /* Create new statement */
+        auto ast = MakeAST<VarDeclStmnt>();
+        {
+            ast->flags          = varDeclStmnt->flags;
+            ast->typeSpecifier  = varDeclStmnt->typeSpecifier;
+            ast->varDecls.push_back(varDecl);
+        }
+        return ast;
+    }
+    return varDeclStmnt;
+}
+
 ObjectExprPtr MakeObjectExpr(const ExprPtr& prefixExpr, const std::string& ident, Decl* symbolRef)
 {
     auto ast = MakeAST<ObjectExpr>();
@@ -228,6 +260,45 @@ ArrayExprPtr MakeArrayExpr(const ExprPtr& prefixExpr, std::vector<ExprPtr>&& arr
 ArrayExprPtr MakeArrayExpr(const ExprPtr& prefixExpr, const std::vector<int>& arrayIndices)
 {
     return MakeArrayExpr(prefixExpr, MakeArrayIndices(arrayIndices));
+}
+
+ArrayExprPtr MakeArrayExpr(
+    const ExprPtr& prefixExpr,
+    const std::vector<ExprPtr>::const_iterator& arrayIndicesBegin,
+    const std::vector<ExprPtr>::const_iterator& arrayIndicesEnd)
+{
+    auto ast = MakeAST<ArrayExpr>();
+    {
+        ast->prefixExpr = prefixExpr;
+        ast->arrayIndices.insert(
+            ast->arrayIndices.end(),
+            arrayIndicesBegin,
+            arrayIndicesEnd
+        );
+    }
+    return ast;
+}
+
+ArrayExprPtr MakeArrayExprSplit(const ArrayExprPtr& arrayExpr, std::size_t splitArrayIndex)
+{
+    if (arrayExpr != nullptr && splitArrayIndex > 0 && splitArrayIndex < arrayExpr->NumIndices())
+    {
+        /* Make main array expression */
+        auto ast = MakeArrayExpr(
+            MakeArrayExpr(
+                arrayExpr->prefixExpr,
+                arrayExpr->arrayIndices.begin(),
+                arrayExpr->arrayIndices.begin() + splitArrayIndex
+            ),
+            arrayExpr->arrayIndices.begin() + splitArrayIndex,
+            arrayExpr->arrayIndices.end()
+        );
+
+        ast->area = arrayExpr->area;;
+
+        return ast;
+    }
+    return arrayExpr;
 }
 
 RegisterPtr MakeRegister(int slot, const RegisterType registerType)
@@ -356,6 +427,16 @@ CodeBlockStmntPtr MakeCodeBlockStmnt(const StmntPtr& stmnt)
     {
         ast->codeBlock = MakeASTWithOrigin<CodeBlock>(stmnt);
         ast->codeBlock->stmnts.push_back(stmnt);
+    }
+    return ast;
+}
+
+BasicDeclStmntPtr MakeStructDeclStmnt(const StructDeclPtr& structDecl)
+{
+    auto ast = MakeAST<BasicDeclStmnt>();
+    {
+        ast->declObject = structDecl;
+        structDecl->declStmntRef = ast.get();
     }
     return ast;
 }

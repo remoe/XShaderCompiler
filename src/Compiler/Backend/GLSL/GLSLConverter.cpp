@@ -7,13 +7,13 @@
 
 #include "GLSLConverter.h"
 #include "GLSLKeywords.h"
-#include "FuncNameConverter.h"
-#include "TypeConverter.h"
+#include "ExprConverter.h"
 #include "AST.h"
 #include "ASTFactory.h"
 #include "Exception.h"
 #include "Helper.h"
 #include "ReportIdents.h"
+#include <utility>
 
 
 namespace Xsc
@@ -43,6 +43,56 @@ struct CodeBlockStmntArgs
  * GLSLConverter class
  */
 
+bool GLSLConverter::ConvertVarDeclType(VarDecl& varDecl)
+{
+    if (varDecl.semantic.IsSystemValue())
+    {
+        /* Convert data type for system value semantics */
+        const auto dataType = SemanticToGLSLDataType(varDecl.semantic);
+        if (dataType != DataType::Undefined)
+            return ConvertVarDeclBaseTypeDenoter(varDecl, dataType);
+    }
+    return false;
+}
+
+bool GLSLConverter::ConvertVarDeclBaseTypeDenoter(VarDecl& varDecl, const DataType dataType)
+{
+    if (auto varDeclStmnt = varDecl.declStmntRef)
+    {
+        if (auto varTypeDen = varDecl.GetTypeDenoter()->GetAliased().As<BaseTypeDenoter>())
+        {
+            if (varTypeDen->dataType != dataType)
+            {
+                auto newVarTypeDen = std::make_shared<BaseTypeDenoter>(dataType);
+
+                varDeclStmnt->typeSpecifier->typeDenoter = newVarTypeDen;
+                varDeclStmnt->typeSpecifier->ResetTypeDenoter();
+
+                /* Set custom type denoter for this variable */
+                varDecl.SetCustomTypeDenoter(newVarTypeDen);
+
+                /*
+                ~~~~~~~~~~~~~~~ TODO: ~~~~~~~~~~~~~~~
+                split declaration statement into three parts:
+                1. All variables before this one
+                2. This variable
+                3. All variables after this one
+
+                Example of converting 'b' (Before):
+                    "uint a, b = a, c = b;"
+
+                Example of converting 'b' (After):
+                    "uint a; int b = (int)a; uint c = (uint)b;"
+                */
+
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+
 /*
  * ======= Private: =======
  */
@@ -57,46 +107,13 @@ void GLSLConverter::ConvertASTPrimary(Program& program, const ShaderInput& input
     autoBindingSlot_    = outputDesc.options.autoBindingStartSlot;
     separateSamplers_   = outputDesc.options.separateSamplers;
 
-    /* Convert type of specific semantics */
-    TypeConverter typeConverter;
-    typeConverter.Convert(program, GLSLConverter::ConvertVarDeclType);
-
-    /* Convert expressions */
-    Flags exprConverterFlags = ExprConverter::All;
-
-    if (HasShadingLanguage420Pack())
-    {
-        /*
-        Remove specific conversions when the GLSL output version is explicitly set to 4.20 or higher,
-        i.e. "GL_ARB_shading_language_420pack" extension is available.
-        */
-        exprConverterFlags.Remove(ExprConverter::ConvertVectorSubscripts);
-        exprConverterFlags.Remove(ExprConverter::ConvertInitializerToCtor);
-    }
-
-    exprConverter_.Convert(program, exprConverterFlags);
-
     /* Visit program AST */
     Visit(&program);
-
-    /* Convert function names after main conversion, since functon owner structs may have been renamed as well */
-    FuncNameConverter funcNameConverter;
-    funcNameConverter.Convert(
-        program,
-        GetNameMangling(),
-        GLSLConverter::CompareFuncSignatures,
-        FuncNameConverter::All
-    );
 }
 
 bool GLSLConverter::IsVKSL() const
 {
     return IsLanguageVKSL(versionOut_);
-}
-
-bool GLSLConverter::HasShadingLanguage420Pack() const
-{
-    return ( IsVKSL() || ( versionOut_ >= OutputShaderVersion::GLSL420 && versionOut_ <= OutputShaderVersion::GLSL450 ) );
 }
 
 bool GLSLConverter::UseSeparateSamplers() const
@@ -152,7 +169,6 @@ IMPLEMENT_VISIT_PROC(CodeBlock)
     VisitScopedStmntList(ast->stmnts);
 }
 
-//TODO: reset 'prefixExpr' for texture intrinsic calls
 IMPLEMENT_VISIT_PROC(CallExpr)
 {
     Visit(ast->prefixExpr);
@@ -162,24 +178,18 @@ IMPLEMENT_VISIT_PROC(CallExpr)
         /* Insert prefix expression as first argument into function call, if this is a texture intrinsic call */
         if (IsTextureIntrinsic(ast->intrinsic) && ast->prefixExpr)
         {
-            if (UseSeparateSamplers() && !IsTextureLoadIntrinsic(ast->intrinsic))
+            /* Move object prefix into argument list as first argument */
+            ast->PushPrefixToArguments();
+
+            if (UseSeparateSamplers() && !IsTextureLoadIntrinsic(ast->intrinsic) && ast->arguments.size() >= 2)
             {
-                /* Replace sampler state argument by sampler/texture binding call */
-                if (!ast->arguments.empty())
+                /* Is second argument a sampler state object? */
+                auto arg1Expr = ast->arguments[1].get();
+                if (IsSamplerStateTypeDenoter(arg1Expr->GetTypeDenoter()))
                 {
-                    auto arg0Expr = ast->arguments.front().get();
-                    if (IsSamplerStateTypeDenoter(arg0Expr->GetTypeDenoter()))
-                    {
-                        ast->arguments[0] = ASTFactory::MakeTextureSamplerBindingCallExpr(
-                            ast->prefixExpr, ast->arguments[0]
-                        );
-                    }
+                    /* Merge texture object and sampler state arguments into texture/sampler binding call */
+                    ast->MergeArguments(0, ASTFactory::MakeTextureSamplerBindingCallExpr);
                 }
-            }
-            else
-            {
-                /* Insert texture object as parameter into intrinsic arguments */
-                ast->arguments.insert(ast->arguments.begin(), ast->prefixExpr);
             }
         }
     }
@@ -211,6 +221,28 @@ IMPLEMENT_VISIT_PROC(SwitchCase)
 
     Visit(ast->expr);
     VisitScopedStmntList(ast->stmnts);
+}
+
+IMPLEMENT_VISIT_PROC(TypeSpecifier)
+{
+    /* Replace compatible struct types */
+    auto typeDen = ast->typeDenoter->GetSub();
+    if (auto structTypeDen = typeDen->As<StructTypeDenoter>())
+    {
+        if (auto structDecl = structTypeDen->structDeclRef)
+        {
+            if (structDecl->compatibleStructRef)
+            {
+                /* Replace original struct reference by its compatible struct type */
+                structTypeDen->structDeclRef = structDecl->compatibleStructRef;
+
+                /* Drop original structure declaration */
+                GetProgram()->disabledAST.emplace_back(std::move(ast->structDecl));
+            }
+        }
+    }
+
+    VISIT_DEFAULT(TypeSpecifier);
 }
 
 /* --- Declarations --- */
@@ -248,6 +280,14 @@ IMPLEMENT_VISIT_PROC(SamplerDecl)
 
 IMPLEMENT_VISIT_PROC(StructDecl)
 {
+    if (!ast->IsAnonymous())
+    {
+        while (Fetch(ast->ident))
+            RenameIdentOf(ast);
+        
+        RegisterDeclIdent(ast);
+    }
+
     LabelAnonymousDecl(ast);
     RenameReservedKeyword(ast->ident);
 
@@ -275,6 +315,9 @@ IMPLEMENT_VISIT_PROC(StructDecl)
 
     if (!UseSeparateSamplers())
         RemoveSamplerStateVarDeclStmnts(ast->varMembers);
+
+    /* Moved nested struct declarations out of the uniform buffer declaration */
+    MoveNestedStructDecls(ast->localStmnts, false);
 
     /* Is this an empty structure? */
     if (ast->NumMemberVariables(true) == 0)
@@ -304,6 +347,9 @@ IMPLEMENT_VISIT_PROC(UniformBufferDecl)
     {
         ConvertSlotRegisters(ast->slotRegisters);
         VisitScopedStmntList(ast->localStmnts);
+
+        /* Moved nested struct declarations out of the uniform buffer declaration */
+        MoveNestedStructDecls(ast->localStmnts, true);
     }
     PopUniformBufferDecl();
 }
@@ -344,6 +390,12 @@ IMPLEMENT_VISIT_PROC(VarDeclStmnt)
         const auto& typeDen = ast->typeSpecifier->typeDenoter->GetAliased();
         if (typeDen.IsMatrix())
             ast->typeSpecifier->SwapMatrixStorageLayout(TypeModifier::RowMajor);
+    }
+
+    if (!InsideFunctionDecl())
+    {
+        /* Remove const type modifier from variables that are out of local function scope */
+        ast->typeSpecifier->typeModifiers.erase(TypeModifier::Const);
     }
 
     VISIT_DEFAULT(VarDeclStmnt);
@@ -405,6 +457,9 @@ IMPLEMENT_VISIT_PROC(ForLoopStmnt)
             VisitScopedStmnt(ast->bodyStmnt);
     }
     CloseScope();
+
+    /* Ensure boolean scalar type for condition */
+    ExprConverter::ConvertExprIfCastRequired(ast->condition, DataType::Bool);
 }
 
 IMPLEMENT_VISIT_PROC(WhileLoopStmnt)
@@ -418,6 +473,9 @@ IMPLEMENT_VISIT_PROC(WhileLoopStmnt)
         VisitScopedStmnt(ast->bodyStmnt);
     }
     CloseScope();
+
+    /* Ensure boolean scalar type for condition */
+    ExprConverter::ConvertExprIfCastRequired(ast->condition, DataType::Bool);
 }
 
 IMPLEMENT_VISIT_PROC(DoWhileLoopStmnt)
@@ -431,6 +489,9 @@ IMPLEMENT_VISIT_PROC(DoWhileLoopStmnt)
         Visit(ast->condition);
     }
     CloseScope();
+
+    /* Ensure boolean scalar type for condition */
+    ExprConverter::ConvertExprIfCastRequired(ast->condition, DataType::Bool);
 }
 
 IMPLEMENT_VISIT_PROC(IfStmnt)
@@ -445,6 +506,9 @@ IMPLEMENT_VISIT_PROC(IfStmnt)
         Visit(ast->elseStmnt);
     }
     CloseScope();
+
+    /* Ensure boolean scalar type for condition */
+    ExprConverter::ConvertExprIfCastRequired(ast->condition, DataType::Bool);
 }
 
 IMPLEMENT_VISIT_PROC(ElseStmnt)
@@ -497,23 +561,6 @@ IMPLEMENT_VISIT_PROC(ReturnStmnt)
 //  and make a correct conversion of "CastExpr" for a struct-constructor (don't use SequenceExpr here)
 #if 1
 
-IMPLEMENT_VISIT_PROC(LiteralExpr)
-{
-    /* Replace 'h' and 'H' suffix with 'f' suffix */
-    auto& s = ast->value;
-
-    if (!s.empty())
-    {
-        if (s.back() == 'h' || s.back() == 'H')
-        {
-            s.back() = 'f';
-            ast->dataType = DataType::Float;
-        }
-    }
-
-    VISIT_DEFAULT(LiteralExpr);
-}
-
 IMPLEMENT_VISIT_PROC(CastExpr)
 {
     /* Call default visitor first, then convert to avoid multiple conversions on its sub expressions */
@@ -548,6 +595,10 @@ IMPLEMENT_VISIT_PROC(CastExpr)
                 ast->expr = ASTFactory::MakeConstructorListExpr(ast->expr, memberTypeDens);
             }
         }
+    }
+    else if (auto arrayTypeDen = typeDen.As<ArrayTypeDenoter>())
+    {
+        //TODO...
     }
 }
 
@@ -678,65 +729,6 @@ bool GLSLConverter::RenameReservedKeyword(Identifier& ident)
     }
 }
 
-bool GLSLConverter::CompareFuncSignatures(const FunctionDecl& lhs, const FunctionDecl& rhs)
-{
-    /* Compare function signatures and ignore generic sub types (GLSL has no distinction for these types) */
-    return lhs.EqualsSignature(rhs, TypeDenoter::IgnoreGenericSubType);
-}
-
-bool GLSLConverter::ConvertVarDeclType(VarDecl& varDecl)
-{
-    if (varDecl.semantic.IsSystemValue())
-    {
-        /* Convert data type for system value semantics */
-        const auto dataType = SemanticToGLSLDataType(varDecl.semantic);
-        if (dataType != DataType::Undefined)
-        {
-            ConvertVarDeclBaseTypeDenoter(varDecl, dataType);
-            return true;
-        }
-    }
-    return false;
-}
-
-bool GLSLConverter::ConvertVarDeclBaseTypeDenoter(VarDecl& varDecl, const DataType dataType)
-{
-    if (auto varDeclStmnt = varDecl.declStmntRef)
-    {
-        auto typeDen = std::make_shared<BaseTypeDenoter>(dataType);
-
-        if (varDeclStmnt->varDecls.size() == 1)
-        {
-            /* Convert type of declaration statement */
-            varDeclStmnt->typeSpecifier->typeDenoter = typeDen;
-        }
-        else
-        {
-            /* Set custom type denoter for this variable */
-            varDecl.SetCustomTypeDenoter(typeDen);
-
-            /*
-            ~~~~~~~~~~~~~~~ TODO: ~~~~~~~~~~~~~~~
-            split declaration statement into three parts:
-            1. All variables before this one
-            2. This variable
-            3. All variables after this one
-
-            Example of converting 'b' (Before):
-                "uint a, b = a, c = b;"
-
-            Example of converting 'b' (After):
-                "uint a; int b = (int)a; uint c = (uint)b;"
-            */
-        }
-
-        varDecl.ResetTypeDenoter();
-
-        return true;
-    }
-    return false;
-}
-
 /* ----- Function declaration ----- */
 
 void GLSLConverter::ConvertFunctionDecl(FunctionDecl* ast)
@@ -784,6 +776,39 @@ void GLSLConverter::ConvertFunctionDeclDefault(FunctionDecl* ast)
     Visitor::VisitFunctionDecl(ast, nullptr);
 }
 
+static void AddFlagsToStructMembers(const TypeDenoter& typeDen, const Flags& flags)
+{
+    if (auto structTypeDen = typeDen.GetAliased().As<StructTypeDenoter>())
+    {
+        if (auto structDecl = structTypeDen->structDeclRef)
+        {
+            structDecl->ForEachVarDecl(
+                [&flags](VarDeclPtr& member)
+                {
+                    member->flags << flags;
+                }
+            );
+        }
+    }
+}
+
+static BufferType GetBufferTypeOrDefault(const TypeDenoter& typeDen)
+{
+    if (auto bufferTypeDen = typeDen.GetAliased().As<BufferTypeDenoter>())
+        return bufferTypeDen->bufferType;
+    else
+        return BufferType::Undefined;
+}
+
+/*
+Returns true if the specified type results in a dynamic array in GLSL,
+e.g. "InputPatch<float4> positions" becomes "vec4 positions[]"
+*/
+static bool IsTypeDynamicArrayInGLSL(const TypeDenoter& typeDen)
+{
+    return (typeDen.IsArray() || IsPatchBufferType(GetBufferTypeOrDefault(typeDen)));
+}
+
 void GLSLConverter::ConvertFunctionDeclEntryPoint(FunctionDecl* ast)
 {
     /* Propagate array parameter declaration to input/output semantics */
@@ -792,25 +817,15 @@ void GLSLConverter::ConvertFunctionDeclEntryPoint(FunctionDecl* ast)
         if (!param->varDecls.empty())
         {
             auto varDecl = param->varDecls.front();
+
             const auto& typeDen = varDecl->GetTypeDenoter()->GetAliased();
-            if (auto arrayTypeDen = typeDen.As<ArrayTypeDenoter>())
+            if (IsTypeDynamicArrayInGLSL(typeDen))
             {
                 /* Mark this member and all structure members as dynamic array */
                 varDecl->flags << VarDecl::isDynamicArray;
 
-                const auto& subTypeDen = arrayTypeDen->subTypeDenoter->GetAliased();
-                if (auto structSubTypeDen = subTypeDen.As<StructTypeDenoter>())
-                {
-                    if (structSubTypeDen->structDeclRef)
-                    {
-                        structSubTypeDen->structDeclRef->ForEachVarDecl(
-                            [](VarDeclPtr& member)
-                            {
-                                member->flags << VarDecl::isDynamicArray;
-                            }
-                        );
-                    }
-                }
+                if (auto subTypeDen = typeDen.FetchSubTypeDenoter())
+                    AddFlagsToStructMembers(*subTypeDen, VarDecl::isDynamicArray);
             }
         }
     }
@@ -844,7 +859,7 @@ void GLSLConverter::ConvertIntrinsicCall(CallExpr* ast)
         case Intrinsic::Tex2DLod:
         case Intrinsic::Tex3DLod:
         case Intrinsic::TexCubeLod:
-            ConvertIntrinsicCallTexLod(ast);
+            ConvertIntrinsicCallTextureLOD(ast);
             break;
 
         case Intrinsic::Texture_Sample_2:
@@ -867,8 +882,10 @@ void GLSLConverter::ConvertIntrinsicCall(CallExpr* ast)
             break;
 
         default:
-            if (IsGatherIntrisic(ast->intrinsic))
+            if (IsTextureGatherIntrisic(ast->intrinsic))
                 ConvertIntrinsicCallGather(ast);
+            else if (IsTextureCompareIntrinsic(ast->intrinsic))
+                ConvertIntrinsicCallSampleCmp(ast);
             break;
     }
 }
@@ -895,13 +912,13 @@ void GLSLConverter::ConvertIntrinsicCallSaturate(CallExpr* ast)
 static int GetTextureDimFromIntrinsicCall(CallExpr* ast)
 {
     /* Get buffer object from sample intrinsic call */
-    if (ast->prefixExpr)
-        return ExprConverter::GetTextureDimFromExpr(ast->prefixExpr.get(), ast);
+    if (!ast->arguments.empty())
+        return ExprConverter::GetTextureDimFromExpr(ast->arguments.front().get(), ast);
     else
         RuntimeErr(R_FailedToGetTextureDim, ast);
 }
 
-void GLSLConverter::ConvertIntrinsicCallTexLod(CallExpr* ast)
+void GLSLConverter::ConvertIntrinsicCallTextureLOD(CallExpr* ast)
 {
     /* Convert "tex1Dlod(s, t)" to "textureLod(s, t.xyz, t.w)" (also for tex2Dlod, tex3Dlod, and texCUBElod) */
     if (ast->arguments.size() == 2)
@@ -912,7 +929,7 @@ void GLSLConverter::ConvertIntrinsicCallTexLod(CallExpr* ast)
         if (auto textureDim = ExprConverter::GetTextureDimFromExpr(args[0].get()))
         {
             /* Convert arguments */
-            exprConverter_.ConvertExprIfCastRequired(args[1], DataType::Float4, true);
+            ExprConverter::ConvertExprIfCastRequired(args[1], DataType::Float4, true);
 
             /* Generate temporary variable with second argument, and insert its declaration statement before the intrinsic call */
             auto tempVarIdent           = MakeTempVarIdent();
@@ -946,11 +963,11 @@ void GLSLConverter::ConvertIntrinsicCallTextureSample(CallExpr* ast)
 
         /* Ensure argument: float[1,2,3,4] Location */
         if (args.size() >= 2)
-            exprConverter_.ConvertExprIfCastRequired(args[1], VectorDataType(DataType::Float, textureDim), true);
+            ExprConverter::ConvertExprIfCastRequired(args[1], VectorDataType(DataType::Float, textureDim), true);
 
         /* Ensure argument: int[1,2,3] Offset */
         if (args.size() >= 3)
-            exprConverter_.ConvertExprIfCastRequired(args[2], VectorDataType(DataType::Int, textureDim), true);
+            ExprConverter::ConvertExprIfCastRequired(args[2], VectorDataType(DataType::Int, textureDim), true);
     }
 }
 
@@ -964,11 +981,11 @@ void GLSLConverter::ConvertIntrinsicCallTextureSampleLevel(CallExpr* ast)
 
         /* Ensure argument: float[1,2,3,4] Location */
         if (args.size() >= 2)
-            exprConverter_.ConvertExprIfCastRequired(args[1], VectorDataType(DataType::Float, textureDim), true);
+            ExprConverter::ConvertExprIfCastRequired(args[1], VectorDataType(DataType::Float, textureDim), true);
 
         /* Ensure argument: int[1,2,3] Offset */
         if (args.size() >= 4)
-            exprConverter_.ConvertExprIfCastRequired(args[3], VectorDataType(DataType::Int, textureDim), true);
+            ExprConverter::ConvertExprIfCastRequired(args[3], VectorDataType(DataType::Int, textureDim), true);
     }
 }
 
@@ -977,6 +994,7 @@ void GLSLConverter::ConvertIntrinsicCallTextureLoad(CallExpr* ast)
     /* Determine vector size for texture intrinsic */
     if (auto textureDim = GetTextureDimFromIntrinsicCall(ast))
     {
+        /* Validate number of arguments are in [2, 3] */
         auto& args = ast->arguments;
         if (args.size() < 2)
         {
@@ -984,7 +1002,8 @@ void GLSLConverter::ConvertIntrinsicCallTextureLoad(CallExpr* ast)
             return;
         }
 
-        const auto& typeDen = ast->prefixExpr->GetTypeDenoter()->GetAliased();
+        /* Get type denoter from texture object (first argument after it has been moved from the prefix) */
+        const auto& typeDen = args[0]->GetTypeDenoter()->GetAliased();
         if (auto bufferTypeDen = typeDen.As<BufferTypeDenoter>())
         {
             if (bufferTypeDen->bufferType == BufferType::Texture2DMS || bufferTypeDen->bufferType == BufferType::Texture2DMSArray)
@@ -995,7 +1014,7 @@ void GLSLConverter::ConvertIntrinsicCallTextureLoad(CallExpr* ast)
 
                 /* Ensure argument: int Sample */
                 if (args.size() >= 3)
-                    exprConverter_.ConvertExprIfCastRequired(args[2], DataType::Int, true);
+                    ExprConverter::ConvertExprIfCastRequired(args[2], DataType::Int, true);
             }
             else if (bufferTypeDen->bufferType == BufferType::Buffer)
             {
@@ -1003,34 +1022,47 @@ void GLSLConverter::ConvertIntrinsicCallTextureLoad(CallExpr* ast)
             }
             else
             {
-                /* Break up the location argument into separate coordinate and LOD arguments */
-                auto tempVarIdent           = MakeTempVarIdent();
-                auto tempVarTypeSpecifier   = ASTFactory::MakeTypeSpecifier(args[1]->GetTypeDenoter());
-                auto tempVarDeclStmnt       = ASTFactory::MakeVarDeclStmnt(tempVarTypeSpecifier, tempVarIdent, args[1]);
+                /* Is second argument a 2D-vector? */
+                const auto& arg1TypeDen = args[1]->GetTypeDenoter()->GetAliased();
+                auto arg1BaseTypeDen = arg1TypeDen.As<BaseTypeDenoter>();
 
-                /* Insert temporary varibale declaration before the current statement, and visit this AST node for conversion */
-                InsertStmntBefore(tempVarDeclStmnt);
-                Visit(tempVarDeclStmnt);
+                if (arg1BaseTypeDen != nullptr && VectorTypeDim(arg1BaseTypeDen->dataType) < 3)
+                {
+                    /* Insert "0" literal after index argument (e.g. "texelFetch(tex, index)" to "texelFetch(tex, index, 0)") */
+                    auto idxArgExpr = ASTFactory::MakeLiteralExpr(DataType::Int, "0");
+                    args.insert(args.begin() + 2, idxArgExpr);
+                }
+                else
+                {
+                    /* Break up the location argument into separate coordinate and LOD arguments */
+                    auto tempVarIdent           = MakeTempVarIdent();
+                    auto tempVarTypeSpecifier   = ASTFactory::MakeTypeSpecifier(args[1]->GetTypeDenoter());
+                    auto tempVarDeclStmnt       = ASTFactory::MakeVarDeclStmnt(tempVarTypeSpecifier, tempVarIdent, args[1]);
 
-                /* Make new argument expressions */
-                const std::string vectorSubscript = "xyzw";
+                    /* Insert temporary varibale declaration before the current statement, and visit this AST node for conversion */
+                    InsertStmntBefore(tempVarDeclStmnt);
+                    Visit(tempVarDeclStmnt);
 
-                auto prefixExpr = ASTFactory::MakeObjectExpr(tempVarDeclStmnt->varDecls.front().get());
-                auto arg1Expr   = ASTFactory::MakeObjectExpr(prefixExpr, vectorSubscript.substr(0, textureDim));
-                auto arg2Expr   = ASTFactory::MakeObjectExpr(prefixExpr, vectorSubscript.substr(textureDim, 1));
+                    /* Make new argument expressions */
+                    const std::string vectorSubscript = "xyzw";
 
-                args[1] = arg1Expr;
-                args.insert(args.begin() + 2, arg2Expr);
+                    auto prefixExpr = ASTFactory::MakeObjectExpr(tempVarDeclStmnt->varDecls.front().get());
+                    auto arg1Expr   = ASTFactory::MakeObjectExpr(prefixExpr, vectorSubscript.substr(0, textureDim));
+                    auto arg2Expr   = ASTFactory::MakeObjectExpr(prefixExpr, vectorSubscript.substr(textureDim, 1));
 
-                exprConverter_.ConvertExprIfCastRequired(args[2], DataType::Int, true);
+                    args[1] = arg1Expr;
+                    args.insert(args.begin() + 2, arg2Expr);
 
-                /* Ensure argument: int[1,2,3] Offset */
-                if (args.size() >= 4)
-                    exprConverter_.ConvertExprIfCastRequired(args[3], VectorDataType(DataType::Int, textureDim), true);
+                    ExprConverter::ConvertExprIfCastRequired(args[2], DataType::Int, true);
+
+                    /* Ensure argument: int[1,2,3] Offset */
+                    if (args.size() >= 4)
+                        ExprConverter::ConvertExprIfCastRequired(args[3], VectorDataType(DataType::Int, textureDim), true);
+                }
             }
 
             /* Ensure argument: int[1,2,3] Location */
-            exprConverter_.ConvertExprIfCastRequired(args[1], VectorDataType(DataType::Int, textureDim), true);
+            ExprConverter::ConvertExprIfCastRequired(args[1], VectorDataType(DataType::Int, textureDim), true);
         }
     }
 }
@@ -1068,7 +1100,7 @@ void GLSLConverter::ConvertIntrinsicCallImageAtomic(CallExpr* ast)
                 }
 
                 /* Is the buffer declaration a read/write texture? */
-                if (IsRWTextureBufferType(bufferType) && numDims < arg0ArrayExpr->NumIndices())
+                if (IsRWImageBufferType(bufferType) && numDims < arg0ArrayExpr->NumIndices())
                 {
                     /* Map interlocked intrinsic to image atomic intrinsic */
                     ast->intrinsic = InterlockedToImageAtomicIntrinsic(ast->intrinsic);
@@ -1093,36 +1125,19 @@ void GLSLConverter::ConvertIntrinsicCallImageAtomic(CallExpr* ast)
 
         /* Cast arguments if required, for both image and non-image atomics */
         std::size_t dataArgOffset = 1;
-        if (IsRWTextureBufferType(bufferType))
+        if (IsRWImageBufferType(bufferType))
         {
             /* Cast location argument */
-            int numDims = 1;
-            switch (bufferType)
-            {
-                case BufferType::RWBuffer:
-                case BufferType::RWTexture1D:
-                    numDims = 1;
-                    break;
-                case BufferType::RWTexture1DArray:
-                case BufferType::RWTexture2D:
-                    numDims = 2;
-                    break;
-                case BufferType::RWTexture2DArray:
-                case BufferType::RWTexture3D:
-                    numDims = 3;
-                default:
-                    break;
-            }
-
-            exprConverter_.ConvertExprIfCastRequired(args[1], VectorDataType(DataType::Int, numDims), true);
+            const auto numDims = GetBufferTypeTextureDim(bufferType);
+            ExprConverter::ConvertExprIfCastRequired(args[1], VectorDataType(DataType::Int, numDims), true);
             dataArgOffset = 2;
         }
 
         if (args.size() >= (dataArgOffset + 1))
-            exprConverter_.ConvertExprIfCastRequired(args[dataArgOffset], baseDataType, true);
+            ExprConverter::ConvertExprIfCastRequired(args[dataArgOffset], baseDataType, true);
 
         if(ast->intrinsic == Intrinsic::Image_AtomicCompSwap && args.size() >= (dataArgOffset + 2))
-            exprConverter_.ConvertExprIfCastRequired(args[dataArgOffset + 1], baseDataType, true);
+            ExprConverter::ConvertExprIfCastRequired(args[dataArgOffset + 1], baseDataType, true);
     }
 }
 
@@ -1158,7 +1173,7 @@ void GLSLConverter::ConvertIntrinsicCallGather(CallExpr* ast)
         for (int i = offsetArgStart; i < offsetArgEnd; ++i)
         {
             auto& argument = ast->arguments[i];
-            exprConverter_.ConvertExprIfCastRequired(argument, DataType::Int2, true);
+            ExprConverter::ConvertExprIfCastRequired(argument, DataType::Int2, true);
 
             arrayCtorArguments.push_back(argument);
         }
@@ -1180,38 +1195,75 @@ void GLSLConverter::ConvertIntrinsicCallGather(CallExpr* ast)
     }
 }
 
+void GLSLConverter::ConvertIntrinsicCallSampleCmp(CallExpr* ast)
+{
+    /* Convert arguments */
+    auto& args = ast->arguments;
+
+    /* Determine vector size for texture intrinsic */
+    if (auto textureDim = GetTextureDimFromIntrinsicCall(ast))
+    {
+        /* Ensure argument: float[1,2,3,4] Location */
+        if (args.size() >= 2)
+            ExprConverter::ConvertExprIfCastRequired(args[1], VectorDataType(DataType::Float, textureDim), true);
+
+        /* Ensure argument: int[1,2,3] Offset */
+        if (args.size() >= 4)
+            ExprConverter::ConvertExprIfCastRequired(args[3], VectorDataType(DataType::Int, textureDim), true);
+
+        /* Cast and move the compare argument as the last component of the Location argument */
+        if (args.size() >= 3)
+        {
+            /* Ensure argument: float CompareValue */
+            ExprConverter::ConvertExprIfCastRequired(args[2], DataType::Float, true);
+
+            /* Not enough room if texture dimension is 4 (cube array), in which case the argument remains as is */
+            if (textureDim < 4)
+            {
+                DataType targetType = VectorDataType(DataType::Float, textureDim + 1);
+                auto typeDenoter = std::make_shared<BaseTypeDenoter>(targetType);
+
+                args[1] = ASTFactory::MakeTypeCtorCallExpr(typeDenoter, { args[1], args[2] });
+                args.erase(args.begin() + 2);
+            }
+        }
+    }
+
+    /* Insert '0' as the mip level parameter */
+    if (IsTextureCompareLevelZeroIntrinsic(ast->intrinsic))
+        args.insert(args.begin() + 2, ASTFactory::MakeLiteralExpr(DataType::Float, "0"));
+}
+
 void GLSLConverter::ConvertFunctionCall(CallExpr* ast)
 {
-    if (auto funcDecl = ast->funcDeclRef)
+    if (auto funcDecl = ast->GetFunctionDecl())
     {
         if (funcDecl->IsMemberFunction())
         {
             if (funcDecl->IsStatic())
             {
-                /* Drop prefix expression, since GLSL only allows global functions */
+                /* Drop prefix expression, since GLSL does not only allow member functions */
                 ast->prefixExpr.reset();
             }
             else
             {
                 /* Get structure from prefix expression or active structure declaration */
-                StructDecl* activeStructDecl = nullptr;
+                StructDecl* callerStructDecl = nullptr;
 
                 if (ast->prefixExpr)
                 {
                     const auto& typeDen = ast->prefixExpr->GetTypeDenoter()->GetAliased();
                     if (auto structTypeDen = typeDen.As<StructTypeDenoter>())
-                        activeStructDecl = structTypeDen->structDeclRef;
+                        callerStructDecl = structTypeDen->structDeclRef;
                 }
                 else
-                    activeStructDecl = ActiveStructDecl();
+                    callerStructDecl = ActiveStructDecl();
 
                 /* Insert 'self' or 'base' prefix if necessary */
-                ConvertObjectPrefixStructMember(ast->prefixExpr, funcDecl->structDeclRef, activeStructDecl);
+                ConvertObjectPrefixStructMember(ast->prefixExpr, funcDecl->structDeclRef, callerStructDecl, (ast->prefixExpr == nullptr));
 
                 /* Move prefix expression as argument into the function call */
-                if (ast->prefixExpr)
-                    ast->PushArgumentFront(std::move(ast->prefixExpr));
-                else
+                if (!ast->PushPrefixToArguments())
                     RuntimeErr(R_MissingSelfParamForMemberFunc(funcDecl->ToString()), ast);
             }
         }
@@ -1377,10 +1429,18 @@ void GLSLConverter::ConvertObjectExpr(ObjectExpr* objectExpr)
     /* Does this object expression refer to a static variable declaration? */
     if (auto varDecl = objectExpr->FetchVarDecl())
     {
-        if (varDecl->IsStatic())
-            ConvertObjectExprStaticVar(objectExpr);
-        else
-            ConvertObjectExprDefault(objectExpr);
+        /*
+        Don't convert 'self'-parameter again!
+        But 'base'-member can be converted again, for base member access like 'object.Base::member'.
+        */
+        const auto varFlags = varDecl->declStmntRef->flags;
+        if (!varFlags(VarDeclStmnt::isSelfParameter))
+        {
+            if (varDecl->IsStatic())
+                ConvertObjectExprStaticVar(objectExpr);
+            else
+                ConvertObjectExprDefault(objectExpr);
+        }
     }
     else
         ConvertObjectExprDefault(objectExpr);
@@ -1412,38 +1472,30 @@ void GLSLConverter::ConvertObjectExprDefault(ObjectExpr* objectExpr)
         }
     }
 
-    /* Add "self"-parameter to front, if the variable refers to a member of the active structure */
+    /* Add 'self'-parameter to front, if the variable refers to a member of the active structure */
     if (!objectExpr->prefixExpr)
         ConvertObjectPrefixSelfParam(objectExpr->prefixExpr, objectExpr);
 }
 
-void GLSLConverter::ConvertObjectPrefixStructMember(ExprPtr& prefixExpr, const StructDecl* ownerStructDecl, const StructDecl* activeStructDecl)
+void GLSLConverter::ConvertObjectPrefixStructMember(ExprPtr& prefixExpr, const StructDecl* ownerStructDecl, const StructDecl* callerStructDecl, bool useSelfParam)
 {
     /* Does this variable belong to its structure type directly, or to a base structure? */
-    if (ownerStructDecl && activeStructDecl)
+    if (ownerStructDecl && callerStructDecl)
     {
-        if (ownerStructDecl == activeStructDecl)
+        if (ownerStructDecl->IsBaseOf(callerStructDecl, true))
         {
-            if (auto selfParam = ActiveSelfParameter())
+            if (useSelfParam)
             {
-                /* Make the 'self'-parameter the new prefix expression */
-                prefixExpr = ASTFactory::MakeObjectExpr(selfParam);
-            }
-        }
-        else if (ownerStructDecl->IsBaseOf(activeStructDecl))
-        {
-            while (activeStructDecl && activeStructDecl != ownerStructDecl)
-            {
-                if (auto baseMember = activeStructDecl->FetchBaseMember())
+                if (auto selfParam = ActiveSelfParameter())
                 {
-                    /* Insert 'base' member object expression(s) */
-                    prefixExpr = ASTFactory::MakeObjectExpr(prefixExpr, baseMember->ident.Original(), baseMember);
+                    /* Make the 'self'-parameter the new prefix expression */
+                    prefixExpr = ASTFactory::MakeObjectExpr(selfParam);
                 }
-
-                /* Check for next base structure */
-                activeStructDecl = activeStructDecl->baseStructRef;
             }
         }
+
+        /* Insert 'base' member prefixes */
+        InsertBaseMemberPrefixes(prefixExpr, ownerStructDecl, callerStructDecl);
     }
 }
 
@@ -1452,15 +1504,17 @@ void GLSLConverter::ConvertObjectPrefixSelfParam(ExprPtr& prefixExpr, ObjectExpr
     /* Is this object a member of the active owner structure (like 'this->memberVar')? */
     if (auto activeStructDecl = ActiveStructDecl())
     {
-        if (auto varDecl = objectExpr->FetchVarDecl())
+        if (auto selfParam = ActiveSelfParameter())
         {
-            /* Insert 'self' or 'base' prefix if necessary */
-            if (varDecl->structDeclRef == activeStructDecl)
+            if (auto varDecl = objectExpr->FetchVarDecl())
             {
-                if (auto selfParam = ActiveSelfParameter())
+                if (auto ownerStructDecl = varDecl->structDeclRef)
                 {
                     /* Make the 'self'-parameter the new prefix expression */
                     prefixExpr = ASTFactory::MakeObjectExpr(selfParam);
+
+                    /* Insert 'base' member prefixes */
+                    InsertBaseMemberPrefixes(prefixExpr, ownerStructDecl, activeStructDecl);
                 }
             }
         }
@@ -1477,7 +1531,7 @@ void GLSLConverter::ConvertObjectPrefixBaseStruct(ExprPtr& prefixExpr, ObjectExp
             if (auto varDecl = objectExpr->FetchVarDecl())
             {
                 /* Insert 'self' or 'base' prefix if necessary */
-                ConvertObjectPrefixStructMember(prefixExpr, varDecl->structDeclRef, activeStructDecl);
+                ConvertObjectPrefixStructMember(prefixExpr, varDecl->structDeclRef, activeStructDecl, false);
             }
         }
     }
@@ -1493,7 +1547,7 @@ void GLSLConverter::ConvertObjectPrefixNamespace(ExprPtr& prefixExpr, ObjectExpr
         {
             if (prefixObjectExpr->prefixExpr)
             {
-                /* Fetch "base"-member from prefix structure type */
+                /* Fetch 'base'-member from prefix structure type */
                 const auto& prefixTypeDen = prefixObjectExpr->prefixExpr->GetTypeDenoter()->GetAliased();
                 if (auto prefixStructTypeDen = prefixTypeDen.As<StructTypeDenoter>())
                 {
@@ -1503,7 +1557,7 @@ void GLSLConverter::ConvertObjectPrefixNamespace(ExprPtr& prefixExpr, ObjectExpr
             }
             else
             {
-                /* Fetch "base"-member from active structure declaration */
+                /* Fetch 'base'-member from active structure declaration */
                 if (auto activeStructDecl = ActiveStructDecl())
                     ConvertObjectPrefixNamespaceStruct(prefixObjectExpr, objectExpr, baseStructDecl, activeStructDecl);
             }
@@ -1521,7 +1575,7 @@ void GLSLConverter::ConvertObjectPrefixNamespaceStruct(ObjectExpr* prefixObjectE
     }
     else
     {
-        /* Convert prefix expression from base struct namespace to "base"-member */
+        /* Convert prefix expression from base struct namespace to 'base'-member */
         if (auto baseMember = activeStructDecl->FetchBaseMember())
         {
             objectExpr->isStatic        = false;
@@ -1529,7 +1583,7 @@ void GLSLConverter::ConvertObjectPrefixNamespaceStruct(ObjectExpr* prefixObjectE
             prefixObjectExpr->ident     = baseMember->ident.Original();
         }
 
-        /* Insert further "base" members until specified base structure namespace has reached */
+        /* Insert further 'base' members until specified base structure namespace has reached */
         while (true)
         {
             /* Get next base structure */
@@ -1539,11 +1593,27 @@ void GLSLConverter::ConvertObjectPrefixNamespaceStruct(ObjectExpr* prefixObjectE
 
             if (auto baseMember = activeStructDecl->FetchBaseMember())
             {
-                /* Insert next "base"-member object expression */
+                /* Insert next 'base'-member object expression */
                 objectExpr->prefixExpr = ASTFactory::MakeObjectExpr(objectExpr->prefixExpr, baseMember->ident, baseMember);
             }
             else
                 break;
+        }
+    }
+}
+
+void GLSLConverter::InsertBaseMemberPrefixes(ExprPtr& prefixExpr, const StructDecl* ownerStructDecl, const StructDecl* callerStructDecl)
+{
+    if (ownerStructDecl->IsBaseOf(callerStructDecl))
+    {
+        while (callerStructDecl && callerStructDecl != ownerStructDecl)
+        {
+            /* Insert 'base' member object expression */
+            if (auto baseMember = callerStructDecl->FetchBaseMember())
+                prefixExpr = ASTFactory::MakeObjectExpr(prefixExpr, baseMember->ident.Original(), baseMember);
+
+            /* Check for next base structure */
+            callerStructDecl = callerStructDecl->baseStructRef;
         }
     }
 }

@@ -67,6 +67,9 @@ class GLSLGenerator : public Generator
         // Returns true if the output shader language is VKSL (for Vulkan/SPIR-V).
         bool IsVKSL() const;
 
+        // Returns true if the 'GL_ARB_shading_language_420pack' is explicitly available.
+        bool HasShadingLanguage420Pack() const;
+
         // Returns true if separate objects for samplers & textures should be used.
         bool UseSeparateSamplers() const;
 
@@ -86,10 +89,10 @@ class GLSLGenerator : public Generator
         void ErrorIntrinsic(const std::string& intrinsicName, const AST* ast = nullptr);
 
         // Returns the number of binding locations required by the specified type, or -1 if type is invalid.
-        int GetNumBindingLocations(TypeDenoterPtr typeDenoter);
+        int GetNumBindingLocations(const TypeDenoter* typeDenoter);
 
         // Attempts to find an empty binding location for the specified type, or returns -1 if it cannot find one. 
-        int GetBindingLocation(const TypeDenoterPtr& typeDenoter, bool input);
+        int GetBindingLocation(const TypeDenoter* typeDenoter, bool input);
 
         /* --- Visitor implementation --- */
 
@@ -107,9 +110,9 @@ class GLSLGenerator : public Generator
         DECL_VISIT_PROC( UniformBufferDecl );
         DECL_VISIT_PROC( BufferDeclStmnt   );
         DECL_VISIT_PROC( SamplerDeclStmnt  );
-        DECL_VISIT_PROC( StructDeclStmnt   );
         DECL_VISIT_PROC( VarDeclStmnt      );
         DECL_VISIT_PROC( AliasDeclStmnt    );
+        DECL_VISIT_PROC( BasicDeclStmnt    );
 
         DECL_VISIT_PROC( NullStmnt         );
         DECL_VISIT_PROC( CodeBlockStmnt    );
@@ -139,6 +142,17 @@ class GLSLGenerator : public Generator
         DECL_VISIT_PROC( InitializerExpr   );
 
         /* --- Helper functions for code generation --- */
+
+        /* ----- Pre processing AST ----- */
+
+        void PreProcessAST(const ShaderInput& inputDesc, const ShaderOutput& outputDesc);
+        void PreProcessStructParameterAnalyzer(const ShaderInput& inputDesc);
+        void PreProcessTypeConverter();
+        void PreProcessExprConverterPrimary();
+        void PreProcessGLSLConverter(const ShaderInput& inputDesc, const ShaderOutput& outputDesc);
+        void PreProcessFuncNameConverter();
+        void PreProcessReferenceAnalyzer(const ShaderInput& inputDesc);
+        void PreProcessExprConverterSecondary();
 
         /* ----- Basics ----- */
 
@@ -190,7 +204,6 @@ class GLSLGenerator : public Generator
         /* ----- Output semantics ----- */
 
         void WriteLocalOutputSemantics(FunctionDecl* entryPoint);
-        void WriteLocalOutputSemanticsVarDecl(VarDecl* varDecl);
         void WriteLocalOutputSemanticsStructDeclParam(VarDeclStmnt* param, StructDecl* structDecl);
         
         void WriteGlobalOutputSemantics(FunctionDecl* entryPoint);
@@ -266,10 +279,11 @@ class GLSLGenerator : public Generator
         void WriteWrapperIntrinsicsSinCos(const IntrinsicUsage& usage);
         void WriteWrapperIntrinsicsMemoryBarrier(const Intrinsic intrinsic, bool groupSync);
 
+        void WriteWrapperMatrixSubscript(const MatrixSubscriptUsage& usage);
+
         /* ----- Structure ----- */
 
-        bool WriteStructDecl(StructDecl* structDecl, bool writeSemicolon, bool allowNestedStruct = false);
-        bool WriteStructDeclStandard(StructDecl* structDecl, bool endWithSemicolon);
+        bool WriteStructDecl(StructDecl* structDecl, bool endWithSemicolon);
 
         /* ----- BufferDecl ----- */
 
@@ -315,7 +329,6 @@ class GLSLGenerator : public Generator
         bool                                    separateSamplers_       = true;
         bool                                    autoBinding_            = false;
 
-        bool                                    isInsideInterfaceBlock_ = false;
         std::set<int>                           usedInLocationsSet_;
         std::set<int>                           usedOutLocationsSet_;
 

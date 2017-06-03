@@ -31,6 +31,9 @@ CallExprPtr                     MakeIntrinsicCallExpr(
 
 CallExprPtr                     MakeTextureSamplerBindingCallExpr(const ExprPtr& textureObjectExpr, const ExprPtr& samplerObjectExpr);
 
+// Makes a call expression to a wrapper function.
+CallExprPtr                     MakeWrapperCallExpr(const std::string& funcIdent, const TypeDenoterPtr& typeDenoter, const std::vector<ExprPtr>& arguments);
+
 InitializerExprPtr              MakeInitializerExpr(const std::vector<ExprPtr>& exprs);
 
 // Makes a type constructor function call.
@@ -41,8 +44,11 @@ CastExprPtr                     MakeLiteralCastExpr(const TypeDenoterPtr& typeDe
 
 BinaryExprPtr                   MakeBinaryExpr(const ExprPtr& lhsExpr, const BinaryOp op, const ExprPtr& rhsExpr);
 
+// Makes a new LiteralExpr of the specified data type and literal value.
 LiteralExprPtr                  MakeLiteralExpr(const DataType literalType, const std::string& literalValue);
-LiteralExprPtr                  MakeLiteralExpr(const Variant& literalValue);
+
+// Makes a new LiteralExpr if the specified variant is either a boolean, integral, or real type. Otherwise, null is returned.
+LiteralExprPtr                  MakeLiteralExprOrNull(const Variant& literalValue);
 
 AliasDeclStmntPtr               MakeBaseTypeAlias(const DataType dataType, const std::string& ident);
 
@@ -53,12 +59,28 @@ TypeSpecifierPtr                MakeTypeSpecifier(const DataType dataType);
 VarDeclStmntPtr                 MakeVarDeclStmnt(const TypeSpecifierPtr& typeSpecifier, const std::string& ident, const ExprPtr& initializer = nullptr);
 VarDeclStmntPtr                 MakeVarDeclStmnt(const DataType dataType, const std::string& ident, const ExprPtr& initializer = nullptr);
 
+// Returns a new VarDeclStmnt with the specified VarDecl index and removes the specified VarDecl from the input statement, except there is only one VarDecl.
+VarDeclStmntPtr                 MakeVarDeclStmntSplit(const VarDeclStmntPtr& varDeclStmnt, std::size_t idx);
+
 ObjectExprPtr                   MakeObjectExpr(const ExprPtr& prefixExpr, const std::string& ident, Decl* symbolRef = nullptr);
 ObjectExprPtr                   MakeObjectExpr(const std::string& ident, Decl* symbolRef = nullptr);
 ObjectExprPtr                   MakeObjectExpr(Decl* symbolRef);
 
 ArrayExprPtr                    MakeArrayExpr(const ExprPtr& prefixExpr, std::vector<ExprPtr>&& arrayIndices);
 ArrayExprPtr                    MakeArrayExpr(const ExprPtr& prefixExpr, const std::vector<int>& arrayIndices);
+ArrayExprPtr                    MakeArrayExpr(
+                                    const ExprPtr& prefixExpr,
+                                    const std::vector<ExprPtr>::const_iterator& arrayIndicesBegin,
+                                    const std::vector<ExprPtr>::const_iterator& arrayIndicesEnd
+                                );
+
+/*
+Splits the specified array expression at the specified array index location.
+If 'lastPrefixArrayIndex' is zero, or greater than or equal to the number of array indices, the input expression 'arrayExpr' is returned.
+Otherwise, the left hand side is splitted as prefix expression into the return expression.
+Example (pseudocode): MakeArrayExprSplit('prefix[0][1][2]', 2) --> '(prefix[0][1])[2]'
+*/
+ArrayExprPtr                    MakeArrayExprSplit(const ArrayExprPtr& arrayExpr, std::size_t splitArrayIndex);
 
 RegisterPtr                     MakeRegister(int slot, const RegisterType registerType = RegisterType::Undefined);
 
@@ -78,6 +100,8 @@ ArrayDimensionPtr               MakeArrayDimension(int arraySize);
 
 // Makes a code block statement with initial code block and the specified statement inserted.
 CodeBlockStmntPtr               MakeCodeBlockStmnt(const StmntPtr& stmnt);
+
+BasicDeclStmntPtr               MakeStructDeclStmnt(const StructDeclPtr& structDecl);
 
 /* ----- Make list functions ----- */
 

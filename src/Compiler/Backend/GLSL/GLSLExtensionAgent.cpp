@@ -30,6 +30,8 @@ GLSLExtensionAgent::GLSLExtensionAgent()
         { Intrinsic::AsFloat,                   E_GL_ARB_gpu_shader5        },
         { Intrinsic::AsInt,                     E_GL_ARB_gpu_shader5        },
         { Intrinsic::AsUInt_1,                  E_GL_ARB_gpu_shader5        },
+        { Intrinsic::FirstBitHigh,              E_GL_ARB_gpu_shader_fp64    },
+        { Intrinsic::FirstBitLow,               E_GL_ARB_gpu_shader_fp64    },
         { Intrinsic::DDXCoarse,                 E_GL_ARB_derivative_control },
         { Intrinsic::DDXFine,                   E_GL_ARB_derivative_control },
         { Intrinsic::DDYCoarse,                 E_GL_ARB_derivative_control },
@@ -71,16 +73,10 @@ std::set<std::string> GLSLExtensionAgent::DetermineRequiredExtensions(
     switch (shaderTarget)
     {
         case ShaderTarget::VertexShader:
-            //TODO:
-            /* Check for explicit binding point or vertex semantics */
-            //if (explicitBinding_)
-            //    AcquireExtension(E_GL_ARB_shading_language_420pack);
-            break;
-            
         case ShaderTarget::FragmentShader:
-            /* Check for explicit binding point (fragment shaders have always binding slots) */
+            /* Check for explicit binding for vertex input attributes or fragment shader outputs */
             if (explicitBinding_)
-                AcquireExtension(E_GL_ARB_shading_language_420pack);
+                AcquireExtension(E_GL_ARB_explicit_attrib_location);
             break;
 
         default:
@@ -190,11 +186,42 @@ IMPLEMENT_VISIT_PROC(VarDecl)
     VISIT_DEFAULT(VarDecl);
 }
 
+IMPLEMENT_VISIT_PROC(BufferDecl)
+{
+    if (ast->flags(AST::isReachable))
+    {
+        /* Check for arrays of arrays */
+        if (ast->GetTypeDenoter()->NumDimensions() >= 2)
+            AcquireExtension(E_GL_ARB_arrays_of_arrays, R_MultiDimArray, ast);
+
+        /* Check for buffer types */
+        const auto bufferType = ast->GetBufferType();
+
+        if (bufferType == BufferType::TextureCubeArray)
+            AcquireExtension(E_GL_ARB_texture_cube_map_array, R_TextureCubeArray, ast);
+
+        if (IsRWBufferType(bufferType))
+        {
+            if ( bufferType == BufferType::RWStructuredBuffer       ||
+                 bufferType == BufferType::RWByteAddressBuffer      ||
+                 bufferType == BufferType::AppendStructuredBuffer   ||
+                 bufferType == BufferType::ConsumeStructuredBuffer )
+            {
+                AcquireExtension(E_GL_ARB_shader_storage_buffer_object, R_RWStructuredBufferObject, ast);
+            }
+            else
+                AcquireExtension(E_GL_ARB_shader_image_load_store, R_RWTextureObject, ast);
+        }
+
+        VISIT_DEFAULT(BufferDecl);
+    }
+}
+
 IMPLEMENT_VISIT_PROC(FunctionDecl)
 {
     if (ast->flags(AST::isReachable))
     {
-        Visit(ast->attribs);
+        Visit(ast->declStmntRef->attribs);
 
         VISIT_DEFAULT(FunctionDecl);
     }
@@ -237,6 +264,12 @@ IMPLEMENT_VISIT_PROC(BufferDeclStmnt)
         AcquireExtension(E_GL_ARB_texture_multisample, R_MultiSampledTexture, ast);
 
     VISIT_DEFAULT(BufferDeclStmnt);
+}
+
+IMPLEMENT_VISIT_PROC(BasicDeclStmnt)
+{
+    /* Only visit declaration object (not attributes here) */
+    Visit(ast->declObject);
 }
 
 IMPLEMENT_VISIT_PROC(BinaryExpr)

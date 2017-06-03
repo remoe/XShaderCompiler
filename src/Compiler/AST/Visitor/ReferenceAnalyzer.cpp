@@ -107,6 +107,7 @@ IMPLEMENT_VISIT_PROC(VarDecl)
     {
         Visit(ast->declStmntRef);
         Visit(ast->bufferDeclRef);
+        Visit(ast->staticMemberVarRef);
         VISIT_DEFAULT(VarDecl);
     }
 }
@@ -133,8 +134,6 @@ IMPLEMENT_VISIT_PROC(SamplerDecl)
         Visit(ast->declStmntRef);
 }
 
-/* --- Declaration statements --- */
-
 IMPLEMENT_VISIT_PROC(FunctionDecl)
 {
     if (Reachable(ast))
@@ -159,14 +158,28 @@ IMPLEMENT_VISIT_PROC(FunctionDecl)
             VISIT_DEFAULT(FunctionDecl);
         }
         PopFunctionDecl();
+
+        /* Mark parent node as reachable */
+        Reachable(ast->declStmntRef);
     }
 }
 
 IMPLEMENT_VISIT_PROC(UniformBufferDecl)
 {
     if (Reachable(ast))
+    {
         VISIT_DEFAULT(UniformBufferDecl);
+        Reachable(ast->declStmntRef);
+    }
 }
+
+IMPLEMENT_VISIT_PROC(VarDeclStmnt)
+{
+    if (Reachable(ast))
+        VISIT_DEFAULT(VarDeclStmnt);
+}
+
+/* --- Declaration statements --- */
 
 IMPLEMENT_VISIT_PROC(BufferDeclStmnt)
 {
@@ -208,13 +221,9 @@ IMPLEMENT_VISIT_PROC(PostUnaryExpr)
 
 IMPLEMENT_VISIT_PROC(CallExpr)
 {
-    /* Visit all forward declarations first */
-    if (auto funcDecl = ast->funcDeclRef)
+    /* Don't use forward declaration for call stack */
+    if (auto funcDecl = ast->GetFunctionImpl())
     {
-        /* Don't use forward declaration for call stack */
-        if (funcDecl->funcImplRef)
-            funcDecl = funcDecl->funcImplRef;
-
         /* Check for recursive calls (if function is already on the call stack) */
         auto funcCallIt = std::find_if(
             callExprStack_.begin(), callExprStack_.end(),
@@ -229,7 +238,7 @@ IMPLEMENT_VISIT_PROC(CallExpr)
             /* Pass call stack to report handler */
             ReportHandler::HintForNextReport(R_CallStack + ":");
             for (auto funcCall : callExprStack_)
-                ReportHandler::HintForNextReport("  '" + funcCall->funcDeclRef->ToString(false) + "' (" + funcCall->area.Pos().ToString() + ")");
+                ReportHandler::HintForNextReport("  '" + funcCall->GetFunctionDecl()->ToString(false) + "' (" + funcCall->area.Pos().ToString() + ")");
 
             /* Throw error message of recursive call */
             RuntimeErr(R_IllegalRecursiveCall(funcDecl->ToString()), ast);
@@ -260,7 +269,7 @@ IMPLEMENT_VISIT_PROC(CallExpr)
                 const auto& typeDen = ast->arguments[0]->GetTypeDenoter()->GetAliased();
                 if (auto bufferTypeDen = typeDen.As<BufferTypeDenoter>())
                 {
-                    if (IsRWTextureBufferType(bufferTypeDen->bufferType))
+                    if (IsRWImageBufferType(bufferTypeDen->bufferType))
                     {
                         if (auto bufferDecl = bufferTypeDen->bufferDeclRef)
                             bufferDecl->flags << BufferDecl::isUsedForImageRead;
@@ -294,6 +303,17 @@ IMPLEMENT_VISIT_PROC(ObjectExpr)
         {
             /* Mark frag-coord usage in fragment program layout */
             program_->layoutFragment.fragCoordUsed = true;
+        }
+    }
+
+    /* Fetch used matrix subscripts */
+    if (ast->prefixExpr)
+    {
+        const auto& prefixTypeDen = ast->prefixExpr->GetTypeDenoter()->GetAliased();
+        if (prefixTypeDen.IsMatrix())
+        {
+            auto prefixBaseTypeDen = prefixTypeDen.As<BaseTypeDenoter>();
+            program_->usedMatrixSubscripts.insert({ prefixBaseTypeDen->dataType, ast->ident });
         }
     }
 

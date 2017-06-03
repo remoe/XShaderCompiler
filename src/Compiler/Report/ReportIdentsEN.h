@@ -32,6 +32,7 @@ DECL_REPORT( TessEvaluationShader,              "tessellation-evaluation shader"
 DECL_REPORT( GeometryShader,                    "geometry shader"                                                                                               );
 DECL_REPORT( FragmentShader,                    "fragment shader"                                                                                               );
 DECL_REPORT( ComputeShader,                     "compute shader"                                                                                                );
+DECL_REPORT( InvalidInputStream,                "invalid input stream"                                                                                          );
 DECL_REPORT( InvalidOutputStream,               "invalid output stream"                                                                                         );
 DECL_REPORT( Implicitly,                        "implicitly"                                                                                                    );
 DECL_REPORT( ButGot,                            "[, but got {0}]"                                                                                               );
@@ -39,6 +40,8 @@ DECL_REPORT( NotImplementedYet,                 "[{0} ]not implemented yet[ (in 
 DECL_REPORT( DeclaredAt,                        "declared at ({0})"                                                                                             );
 DECL_REPORT( PrevDefinitionAt,                  "previous definition at ({0})"                                                                                  );
 DECL_REPORT( ExceptionThrown,                   "exception thrown: "                                                                                            );
+DECL_REPORT( ZeroBased,                         "zero-based"                                                                                                    );
+DECL_REPORT( OneBased,                          "one-based"                                                                                                     );
 
 /* ----- Token ----- */
 
@@ -66,23 +69,14 @@ DECL_REPORT( SamplerTypeDen,                    "sampler type denoter"          
 DECL_REPORT( SamplerState,                      "sampler state"                                                                                                 );
 DECL_REPORT( BufferTypeDen,                     "buffer type denoter"                                                                                           );
 DECL_REPORT( UniformBufferTypeDen,              "uniform buffer type denoter"                                                                                   );
-DECL_REPORT( KeywordDo,                         "'do' keyword"                                                                                                  );
-DECL_REPORT( KeywordWhile,                      "'while' keyword"                                                                                               );
-DECL_REPORT( KeywordFor,                        "'for' keyword"                                                                                                 );
-DECL_REPORT( KeywordIf,                         "'if' keyword"                                                                                                  );
-DECL_REPORT( KeywordElse,                       "'else' keyword"                                                                                                );
-DECL_REPORT( KeywordSwitch,                     "'switch' keyword"                                                                                              );
-DECL_REPORT( KeywordCase,                       "'case' keyword"                                                                                                );
-DECL_REPORT( KeywordDefault,                    "'default' keyword"                                                                                             );
-DECL_REPORT( KeywordTypedef,                    "'typedef' keyword"                                                                                             );
-DECL_REPORT( KeywordStruct,                     "'struct' keyword"                                                                                              );
-DECL_REPORT( KeywordRegister,                   "'register' keyword"                                                                                            );
-DECL_REPORT( KeywordPackOffset,                 "'packoffset' keyword"                                                                                          );
-DECL_REPORT( KeywordReturn,                     "'return' keyword"                                                                                              );
-DECL_REPORT( KeywordInline,                     "'inline' keyword"                                                                                              );
-DECL_REPORT( KeywordTechnique,                  "'technique' keyword"                                                                                           );
-DECL_REPORT( KeywordPass,                       "'pass' keyword"                                                                                                );
-DECL_REPORT( KeywordCompile,                    "'compile' keyword"                                                                                             );
+DECL_REPORT( Keyword,                           "'{0}' keyword"                                                                                                 );
+DECL_REPORT( LayoutQualifier,                   "layout qualifier"                                                                                              );
+DECL_REPORT( MemoryQualifier,                   "memory qualifier"                                                                                              );
+DECL_REPORT( InvariantQualifier,                "invariant qualifier"                                                                                           );
+DECL_REPORT( PrecisionQualifier,                "precision qualifier"                                                                                           );
+DECL_REPORT( ImageType,                         "image type"                                                                                                    );
+DECL_REPORT( StorageBufferType,                 "storage buffer type"                                                                                           );
+DECL_REPORT( AtomicCounterType,                 "atomic counter type"                                                                                           );
 DECL_REPORT( CtrlTransfer,                      "control transfer"                                                                                              );
 DECL_REPORT( InputModifier,                     "input modifier"                                                                                                );
 DECL_REPORT( InterpModifier,                    "interpolation modifier"                                                                                        );
@@ -118,11 +112,14 @@ DECL_REPORT( OnlyBaseTypeAllowed,               "only scalar, vector, and matrix
 DECL_REPORT( CastExpr,                          "cast expression"                                                                                               );
 DECL_REPORT( CantDeriveTypeOfInitializer,       "can not derive type of initializer list without type parameter"                                                );
 DECL_REPORT( CantDeriveTypeOfEmptyInitializer,  "can not derive type of initializer list with no elements"                                                      );
+DECL_REPORT( CantDeriveTypeOfFunction,          "can not derive type of function object"                                                                        );
+DECL_REPORT( CantDeriveTypeOfConstBuffer,       "can not derive type of constant buffer object"                                                                 );
 DECL_REPORT( ConditionOfTernaryExpr,            "condition of ternary expression"                                                                               );
 DECL_REPORT( ExpectedInitializerForArrayAccess, "initializer expression expected for array access"                                                              );
 DECL_REPORT( InvalidNumElementsInInitializer,   "invalid number of elements in initializer expression for type '{0}' (expected {1}, but got {2})"               );
 DECL_REPORT( NotEnoughElementsInInitializer,    "not enough elements in initializer expression"                                                                 );
 DECL_REPORT( NotEnoughIndicesForInitializer,    "not enough array indices specified for initializer expression"                                                 );
+DECL_REPORT( ArrayIndexOutOfBounds,             "array index out of bounds[: {0} is not in range \\[0, {1})]"                                                   );
 
 /* ----- ASTEnums ----- */
 
@@ -143,7 +140,8 @@ DECL_REPORT( IncompleteMatrixSubscript,         "incomplete matrix subscript: '{
 DECL_REPORT( InvalidVectorDimension,            "invalid vector dimension (must be in the range \\[1, 4\\], but got {0})"                                       );
 DECL_REPORT( InvalidVectorSubscript,            "invalid vector subscript '{0}' for {1}"                                                                        );
 DECL_REPORT( InvalidMatrixDimension,            "invalid matrix dimension (must be in the range \\[1, 4\\] x \\[1, 4\\], but got {0} x {1})"                    );
-DECL_REPORT( InvalidCharInMatrixSubscript,      "invalid character '{0}' in [{2}-based ]matrix subscript: '{1}'"                                                );
+DECL_REPORT( InvalidMatrixSubscriptMixture,     "invalid mixture of zero-based and one-based matrix subscripts[: '{0}']"                                        );
+DECL_REPORT( InvalidCharInMatrixSubscript,      "invalid character '{0}' in [{2} ]matrix subscript: '{1}'"                                                      );
 DECL_REPORT( InvalidIntrinsicArgType,           "invalid argument type denoter for intrinsic[ '{0}']"                                                           );
 DECL_REPORT( InvalidIntrinsicArgCount,          "invalid number of arguments for intrinsic[ '{0}'][ (expected {1}, but got {2})]"                               );
 DECL_REPORT( InvalidIntrinsicArgs,              "invalid arguments for intrinsic[ '{0}']"                                                                       );
@@ -159,6 +157,7 @@ DECL_REPORT( MissingRefToAliasDecl,             "missing reference to alias decl
 DECL_REPORT( MissingBaseTypeInArray,            "missing base type in array type denoter"                                                                       );
 DECL_REPORT( MissingRefInTypeDen,               "missing reference to declaration[ in {0}]"                                                                     );
 DECL_REPORT( InvalidExprForSubTypeDen,          "invalid expression to derive sub type denoter[ for '{0}']"                                                     );
+DECL_REPORT( OverloadedFunction,                "<overloaded function>"                                                                                         );
 
 /* ----- SymbolTable ----- */
 
@@ -169,8 +168,7 @@ DECL_REPORT( AmbiguousIntrinsicCall,            "ambiguous intrinsic call[ '{0}'
 DECL_REPORT( IdentIsNotFunc,                    "identifier '{0}' does not name a function"                                                                     );
 DECL_REPORT( IdentIsNotVar,                     "identifier '{0}' does not name a variable"                                                                     );
 DECL_REPORT( IdentIsNotType,                    "identifier '{0}' does not name a type"                                                                         );
-DECL_REPORT( IdentIsNotVarOrBufferOrSampler,    "identifier '{0}' does not name a variable, buffer, or sampler"                                                 );
-DECL_REPORT( IdentIsNotDecl,                    "identifier '{0}' does not name a variable, buffer, sampler, structure, or alias"                               );
+DECL_REPORT( IdentIsNotDecl,                    "identifier '{0}' does not name a declaration object"                                                           );
 DECL_REPORT( IdentIsNotBaseOf,                  "identifier '{0}' does not name a base of '{1}'"                                                                );
 DECL_REPORT( IdentAlreadyDeclared,              "identifier '{0}' already declared in this scope"                                                               );
 DECL_REPORT( NoActiveScopeToRegisterSymbol,     "no active scope to register symbol"                                                                            );
@@ -191,7 +189,7 @@ DECL_REPORT( Expected,                          "expected {0}"                  
 DECL_REPORT( ExpectedPrimaryExpr,               "expected primary expression"                                                                                   );
 DECL_REPORT( ExpectedLiteralExpr,               "expected literal expression"                                                                                   );
 DECL_REPORT( ExpectedTypeDen,                   "expected type denoter"                                                                                         );
-DECL_REPORT( ExpectedBaseTypeDen,               "expected base type denoter"                                                                                    );
+DECL_REPORT( ExpectedBaseTypeDen,               "expected base type denoter[, but got '{0}']"                                                                   );
 DECL_REPORT( ExpectedIntLiteral,                "expected integer literal[, but got '{0}']"                                                                     );
 DECL_REPORT( InFunction,                        " (in function: {0})"                                                                                           );
 DECL_REPORT( FailedToCreateScanner,             "failed to create token scanner"                                                                                );
@@ -226,13 +224,14 @@ DECL_REPORT( UnexpectedEndOfTokenString,        "unexpected end of token string"
 DECL_REPORT( RemainingTokensInPragma,           "remaining unhandled tokens in '#pragma'-directive"                                                             );
 DECL_REPORT( EmptyPragma,                       "empty '#pragma'-directive"                                                                                     );
 
-/* ----- Visitor ----- */
+/* ----- VisitorTracker ----- */
 
 DECL_REPORT( FuncDeclStackUnderflow,            "function declaration stack underflow"                                                                          ); // internal error
 DECL_REPORT( CallExprStackUnderflow,            "call expression stack underflow"                                                                               ); // internal error
 DECL_REPORT( LValueExprStackUnderflow,          "l-value expression stack underflow"                                                                            ); // internal error
 DECL_REPORT( StructDeclStackUnderflow,          "structure declaration stack underflow"                                                                         ); // internal error
 DECL_REPORT( UniformBufferDeclStackUnderflow,   "uniform buffer declaration stack underflow"                                                                    ); // internal error
+DECL_REPORT( VarDeclStmntStackUnderflow,        "variable declaration statement stack underflow"                                                                ); // internal error
 DECL_REPORT( WritePrefixStackUnderflow,         "write prefix stack underflow"                                                                                  ); // internal error
 
 /* ----- Analyzer ----- */
@@ -249,9 +248,10 @@ DECL_REPORT( ExpectedConstExpr,                 "expected constant expression"  
 DECL_REPORT( ExpectedConstIntExpr,              "expected constant integer expression"                                                                          );
 DECL_REPORT( ExpectedConstFloatExpr,            "expected constant floating-point expression"                                                                   );
 DECL_REPORT( VarDeclaredButNeverUsed,           "variable '{0}' is declared but never used"                                                                     );
-DECL_REPORT( ImplicitVectorTruncation,          "implicit truncation of vector type[ (from {0} to {1} dimensions)]"                                             );
+DECL_REPORT( ImplicitVectorTruncation,          "implicit truncation of vector type[ in {2}][ (from {0} to {1} dimensions)]"                                    );
+DECL_REPORT( CantImplicitlyConvertVectorType,   "can not implicitly convert vector type[ in {2}][ (from {0} to {1} dimensions)]"                                );
 
-/* ----- ConstExprEvaluator ----- */
+/* ----- ExprEvaluator ----- */
 
 DECL_REPORT( ExprEvaluator,                     "expression evaluator"                                                                                          );
 DECL_REPORT( IllegalExprInConstExpr,            "illegal {0} in constant expression"                                                                            );
@@ -300,6 +300,9 @@ DECL_REPORT( NoGLSLExtensionVersionRegisterd,   "no GLSL version is registered f
 DECL_REPORT( FragmentCoordinate,                "fragment coordinate"                                                                                           );
 DECL_REPORT( EarlyDepthStencil,                 "early depth stencil test"                                                                                      );
 DECL_REPORT( MultiDimArray,                     "multi-dimensional array"                                                                                       );
+DECL_REPORT( TextureCubeArray,                  "texture cube array"                                                                                            );
+DECL_REPORT( RWStructuredBufferObject,          "RW structured buffer object"                                                                                   );
+DECL_REPORT( RWTextureObject,                   "RW texture object"                                                                                             );
 DECL_REPORT( PackOffsetLayout,                  "pack offset layout"                                                                                            );
 DECL_REPORT( ConstantBuffer,                    "constant buffer"                                                                                               );
 DECL_REPORT( ExplicitBindingSlot,               "explicit binding slot"                                                                                         );
@@ -341,16 +344,21 @@ DECL_REPORT( MacrosWithTwoUnderscoresReserved,  "macros containing consecutive u
 DECL_REPORT( IllegalRedefOfStdMacro,            "illegal redefinition of standard macro[: {0}]"                                                                 );
 DECL_REPORT( IllegalUndefOfStdMacro,            "illegal undefinition of standard macro[: {0}]"                                                                 );
 DECL_REPORT( VersionMustBeFirstDirective,       "'#version'-directive must be the first directive"                                                              );
-DECL_REPORT( UnknwonGLSLVersion,                "unknown GLSL version: '{0}'"                                                                                   );
+DECL_REPORT( UnknownGLSLVersion,                "unknown GLSL version: '{0}'"                                                                                   );
 DECL_REPORT( NoProfileForGLSLVersionBefore150,  "versions before 150 do not allow a profile token"                                                              );
 DECL_REPORT( InvalidGLSLVersionProfile,         "invalid version profile '{0}' (must be 'core' or 'compatibility')"                                             );
 DECL_REPORT( ExtensionNotSupported,             "extension not supported[: {0}]"                                                                                );
 DECL_REPORT( InvalidGLSLExtensionBehavior,      "invalid extension behavior '{0}' (must be 'enable', 'require', 'warn', or 'disable')"                          );
 
+/* ----- GLSLKeywords ----- */
+
+DECL_REPORT( FailedToMapFromGLSLKeyword,        "failed to map GLSL keyword '{0}' to {1}"                                                                       );
+
 /* ----- HLSLIntrinsics ----- */
 
 DECL_REPORT( FailedToDeriveIntrinsicType,       "failed to derive type denoter for intrinsic[ '{0}']"                                                           );
 DECL_REPORT( FailedToDeriveIntrinsicParamType,  "failed to derive parameter type denoter for intrinsic[ '{0}']"                                                 );
+DECL_REPORT( MissingTypeInTextureIntrinsic,     "missing buffer type in texture intrinsic[ '{0}']"                                                              );
 
 /* ----- HLSLKeywords ----- */
 
@@ -411,12 +419,13 @@ DECL_REPORT( VarInitialization,                 "variable initialization"       
 DECL_REPORT( IntrinsicNotDeclaredInObject,      "intrinsic '{0}' not declared in object '{1}'"                                                                  );
 DECL_REPORT( InvalidShaderModelForIntrinsic,    "intrinsic '{0}' requires shader model {1}, but only {2} is specified"                                          );
 DECL_REPORT( InvalidIntrinsicForTexture,        "invalid intrinsic '{0}' for texture object"                                                                    );
-DECL_REPORT( InvalidIntrinsicForRWTexture,      "invalid intrinsic '{0}' for RW-texture object"                                                                 );
+DECL_REPORT( InvalidIntrinsicForRWTexture,      "invalid intrinsic '{0}' for RW texture object"                                                                 );
 DECL_REPORT( InvalidIntrinsicForStreamOutput,   "invalid intrinsic '{0}' for stream-output object"                                                              );
 DECL_REPORT( InvalidGlobalIntrinsicForType,     "invalid global intrinsic '{0}' for type '{1}'"                                                                 );
 DECL_REPORT( InvalidClassIntrinsicForType,      "invalid class intrinsic '{0}' for type '{1}'"                                                                  );
 DECL_REPORT( InvalidClassIntrinsic,             "invalid class intrinsic '{0}' for global function call"                                                        );
 DECL_REPORT( InvalidMemberFuncForType,          "invalid member function '{0}' for type '{1}'"                                                                  );
+DECL_REPORT( InvalidTypeModifierForMemberField, "invalid type modifier for structure member field"                                                              );
 DECL_REPORT( InvalidSymbolRefToVarIdent,        "invalid symbol reference to variable identifier '{0}'"                                                         );
 DECL_REPORT( InvalidVarDeclCountInParam,        "invalid number of variable declarations in function parameter"                                                 ); // internal error
 DECL_REPORT( InvalidInputSemanticInEntryPoint,  "invalid input semantic '{0}' in entry point '{1}'"                                                             );
@@ -426,6 +435,7 @@ DECL_REPORT( MissingOutputSemanticInEntryPoint, "missing output semantic '{0}' i
 DECL_REPORT( MissingAttributeForEntryPoint,     "missing '{0}' attribute for entry point"                                                                       );
 DECL_REPORT( MissingExprInReturnForFunc,        "missing expression in return statement for function with '{0}' return type"                                    );
 DECL_REPORT( MissingInitializerForDefaultParam, "missing initializer expression for default parameter '{0}'"                                                    ); // internal error
+DECL_REPORT( MissingInitializerForConstant,     "missing initializer expression for local constant '{0}'"                                                       );
 DECL_REPORT( MissingSemanticInEntryPointParam,  "missing semantic in parameter '{0}' of entry point"                                                            );
 DECL_REPORT( MissingGenericTypeDen,             "missing generic type denoter[ in '{0}']"                                                                       );
 DECL_REPORT( IllegalUseOfNormModifiers,         "'snorm' and 'unorm' type modifiers can only be used for floating-point types"                                  );
@@ -463,6 +473,22 @@ DECL_REPORT( MemberVarsCantHaveDefaultValues,   "member variables can not have d
 DECL_REPORT( DeclTypeDiffersFromDefType,        "declaration type '{0}' differs from definition type '{1}'"                                                     );
 DECL_REPORT( ArrayTypeCanOnlyAppearInDef,       "array type can only appear in definition of static member variables[: '{0}']"                                  );
 
+/* ----- Instruction ----- */
+
+DECL_REPORT( NotEnoughOperandsInInst,           "not enough operands in SPIR-V instruction"                                                                     );
+
+/* ----- InstructionFactory ----- */
+
+DECL_REPORT( InstructionFactory,                "SPIR-V instruction factory"                                                                                    );
+DECL_REPORT( NoActiveBasicBlock,                "no active basic block to put instructions into"                                                                );
+
+/* ----- SPIRVDisassembler ----- */
+
+DECL_REPORT( SPIRVFileTooSmall,                 "SPIR-V module file is too small"                                                                               );
+DECL_REPORT( SPIRVInvalidMagicNumber,           "invalid magic number in SPIR-V module header[ (expected {0}, but got {1})]"                                    );
+DECL_REPORT( SPIRVUnknownVersionNumber,         "unknown version number in SPIR-V module header[: {0}]"                                                         );
+DECL_REPORT( SPIRVByteStreamNotWordAligned,     "byte stream of SPIR-V module is not 32-bit word aligned"                                                       );
+
 /* ----- Xsc ----- */
 
 DECL_REPORT( InputStreamCantBeNull,             "input stream must not be null"                                                                                 );
@@ -476,6 +502,8 @@ DECL_REPORT( ParsingSourceFailed,               "parsing input code failed"     
 DECL_REPORT( AnalyzingSourceFailed,             "analyzing input code failed"                                                                                   );
 DECL_REPORT( GeneratingOutputCodeFailed,        "generating output code failed"                                                                                 );
 DECL_REPORT( OnlyPreProcessingForNonHLSL,       "only pre-processing supported for shaders other than HLSL or Cg"                                               );
+DECL_REPORT( InvalidILForDisassembling,         "invalid intermediate language for disassembling"                                                               );
+DECL_REPORT( NotBuildWithSPIRV,                 "compiler was not build with SPIR-V"                                                                            );
 
 /* ----- Shell ----- */
 
@@ -492,6 +520,88 @@ DECL_REPORT( CompileShader,                     "compile \"{0}\" to \"{1}\""    
 DECL_REPORT( CompilationSuccessful,             "compilation successful"                                                                                        );
 DECL_REPORT( CompilationFailed,                 "compilation failed"                                                                                            );
 
+/* ----- Commands ----- */
+
+DECL_REPORT( CmdHelpEntry,                      "Shader entry point; default=main"                                                                              );
+DECL_REPORT( CmdHelpSecndEntry,                 "Secondary shader entry point"                                                                                  );
+DECL_REPORT( CmdHelpTarget,                     "Input shader target; valid targets:"                                                                           );
+DECL_REPORT( CmdHelpVersionIn,                  "Input shader version; default=HLSL5; valid versions:"                                                          );
+DECL_REPORT( CmdHelpVersionOut,                 "Shader output version; default=GLSL; valid versions:"                                                          );
+DECL_REPORT( CmdHelpOutput,                     "Shader output file (use '*' for default); default='<FILE>.<ENTRY>.<TARGET>'"                                   );
+DECL_REPORT( CmdHelpIncludePath,                "Adds PATH to the search include paths"                                                                         );
+DECL_REPORT( CmdHelpWarn,                       "Enables/disables the specified warning type; default={0}; valid types:"                                        );
+DECL_REPORT( CmdHelpDetailsWarn,                "all           => all kinds of warnings\n"               \
+                                                "basic         => warn for basic issues\n"               \
+                                                "decl-shadow   => warn for declaration shadowing\n"      \
+                                                "empty-body    => warn for empty statement body\n"       \
+                                                "extension     => warn for required extensions\n"        \
+                                                "implicit-cast => warn for implicit type casts\n"        \
+                                                "index-bound   => warn for index boundary violation\n"   \
+                                                "preprocessor  => warn for pre-processor issues\n"       \
+                                                "reflect       => warn for issues in code reflection\n"  \
+                                                "syntax        => warn for syntactic issues\n"           \
+                                                "unlocated-obj => warn for unlocated optional objects\n" \
+                                                "unused-vars   => warn for unused variables"                                                                    );
+DECL_REPORT( CmdHelpShowAST,                    "Enables/disables debug output for the AST (Abstract Syntax Tree); default={0}"                                 );
+DECL_REPORT( CmdHelpShowTimes,                  "Enables/disables debug output for timings of each compilation step; default={0}"                               );
+DECL_REPORT( CmdHelpReflect,                    "Enables/disables code reflection output; default={0}"                                                          );
+DECL_REPORT( CmdHelpPPOnly,                     "Enables/disables to only preprocess source code; default={0}"                                                  );
+DECL_REPORT( CmdHelpMacro,                      "Adds the identifier <IDENT> to the pre-defined macros with an optional VALUE"                                  );
+DECL_REPORT( CmdHelpSemantic,                   "Adds the vertex semantic <IDENT> binding to VALUE (Requires -EB)"                                              );
+DECL_REPORT( CmdHelpPause,                      "Waits for user input after the translation process"                                                            );
+DECL_REPORT( CmdHelpPresetting,                 "Parse further arguments from the presetting file"                                                              );
+DECL_REPORT( CmdHelpVersion,                    "Prints the version information"                                                                                );
+DECL_REPORT( CmdHelpHelp,                       "Prints the help reference"                                                                                     );
+DECL_REPORT( CmdHelpVerbose,                    "Enables/disables more output for compiler reports; default={0}"                                                );
+DECL_REPORT( CmdHelpColor,                      "Enables/disables color highlighting for shell output; default={0}"                                             );
+DECL_REPORT( CmdHelpOptimize,                   "Enables/disables optimization; default={0}"                                                                    );
+DECL_REPORT( CmdHelpExtension,                  "Enables/disables shader extension output; default={0}"                                                         );
+DECL_REPORT( CmdHelpEnumExtension,              "Enumerates all supported GLSL extensions"                                                                      );
+DECL_REPORT( CmdHelpValidate,                   "Enables/disables to only validate source code; default={0}"                                                    );
+DECL_REPORT( CmdHelpBinding,                    "Enables/disables explicit binding slots; default={0}"                                                          );
+DECL_REPORT( CmdHelpAutoBinding,                "Enables/disables automatic binding slot generation (implies -EB); default={0}"                                 );
+DECL_REPORT( CmdHelpAutoBindingStartSlot,       "Sets the start slot index for automatic binding slot generation; default=0"                                    );
+DECL_REPORT( CmdHelpComment,                    "Enables/disables commentary preservation; default={0}"                                                         );
+DECL_REPORT( CmdHelpWrapper,                    "Enables/disables the preference for intrinsic wrappers; default={0}"                                           );
+DECL_REPORT( CmdHelpUnrollInitializer,          "Enables/disables unrolling of array initializers; default={0}"                                                 );
+DECL_REPORT( CmdHelpObfuscate,                  "Enables/disables code obfuscation; default={0}"                                                                );
+DECL_REPORT( CmdHelpRowMajorAlignment,          "Enables/disables row major packing alignment for matrices; default={0}"                                        );
+DECL_REPORT( CmdHelpFormatting,                 "Enables/disables the specified formatting option; valid types:"                                                );
+DECL_REPORT( CmdHelpDetailsFormatting,          "blanks        => blank lines between declarations; default={1}\n"  \
+                                                "force-braces  => force braces for scopes; default={0}\n"           \
+                                                "compact       => write compact wrapper functions; default={0}\n"   \
+                                                "line-marks    => line marks (e.g. '#line 30'); default={0}\n"      \
+                                                "line-sep      => separate lines in columns; default={1}\n"         \
+                                                "newline-scope => write open braces at new lines; default={1}"                                                  );
+DECL_REPORT( CmdHelpIndent,                     "Code indentation string (use '\\t' for tabs); default='    '"                                                  );
+DECL_REPORT( CmdHelpPrefix,                     "Prefix for the specified name-mangling type; valid types:"                                                     );
+DECL_REPORT( CmdHelpDetailsPrefix,              "in        => input variables; default='xsv_'\n"    \
+                                                "namespace => namespace objects; default='xsn_'\n"  \
+                                                "out       => output variables; default='xsv_'\n"   \
+                                                "reserved  => reserved words; default='xsr_'\n"     \
+                                                "temp      => temporary variables; default='xst_'"                                                              );
+DECL_REPORT( CmdHelpNameMangling,               "Enables/disables the specified name-mangling option; valid types:"                                             );
+DECL_REPORT( CmdHelpDetailsNameMangling,        "buffer-fields   => rename 'buffer' fields, not its identifier; default={0}\n" \
+                                                "force-semantics => force semantics for input/output variables; default={0}"                                    );
+DECL_REPORT( CmdHelpSeparateShaders,            "Ensures compatibility to 'ARB_separate_shader_objects' extension; default={0}"                                 );
+DECL_REPORT( CmdHelpSeparateSamplers,           "Enables/disables generation of separate sampler state objects; default={0}"                                    );
+DECL_REPORT( CmdHelpDisassemble,                "Disassembles the SPIR-V module"                                                                                );
+DECL_REPORT( InvalidShaderTarget,               "invalid shader target[: '{0}']"                                                                                );
+DECL_REPORT( InvalidShaderVersionIn,            "invalid input shader version[: '{0}']"                                                                         );
+DECL_REPORT( InvalidShaderVersionOut,           "invalid output shader version[: '{0}']"                                                                        );
+DECL_REPORT( InvalidWarningType,                "invalid warning type[: '{0}']"                                                                                 );
+DECL_REPORT( InvalidFormattingType,             "invalid formatting type[: '{0}']"                                                                              );
+DECL_REPORT( InvalidPrefixType,                 "invalid prefix type[: '{0}']"                                                                                  );
+DECL_REPORT( InvalidNameManglingType,           "invalid name-mangling type[: '{0}']"                                                                           );
+DECL_REPORT( VertexAttribValueExpectedFor,      "vertex attribute value expected for \"{0}\""                                                                   );
+DECL_REPORT( LoopInPresettingFiles,             "loop in presetting files detected"                                                                             );
+DECL_REPORT( RunPresetting,                     "run presetting[: \"{0}\"]"                                                                                     );
+DECL_REPORT( ChoosePresetting,                  "choose presetting"                                                                                             );
+DECL_REPORT( ChooseAllPresettings,              "ALL"                                                                                                           );
+DECL_REPORT( PresettingsSucceeded,              "all presettings processed successfully"                                                                        );
+DECL_REPORT( PresettingsFailed,                 "{0} of {1} presetting(s) failed"                                                                               );
+DECL_REPORT( NoPresettingsDefined,              "no presettings defined"                                                                                        );
+
 /* ----- Extensions ----- */
 
 #ifdef XSC_ENABLE_LANGUAGE_EXT
@@ -501,6 +611,11 @@ DECL_REPORT( AttributeRequiresExtension,        "attribute '{0}' requires langua
 DECL_REPORT( IllegalVectorSpaceAssignment,      "illegal assignment of '{0}' vector-space to '{1}' vector-space"                                                );
 DECL_REPORT( InconsistVectorSpacesInTypes,      "inconsistent vector-spaces between type denoters[ (found '{0}' and '{1}')]"                                    );
 DECL_REPORT( ExpectedIdentInSpaceAttr,          "expected identifier as argument in 'space' attribute"                                                          );
+DECL_REPORT( CmdHelpLanguageExtension,          "Enables/disables the specified language extension; default={0}; valid types:"                                  );
+DECL_REPORT( CmdHelpDetailsLanguageExtension,   "all         => all kinds of extensions\n"                                  \
+                                                "attr-layout => enable 'layout' attribute to specify image layout format\n" \
+                                                "attr-space  => enable 'space' attribute for a stronger type system"                                            );
+DECL_REPORT( InvalidExtensionType,              "invalid extension type[: '{0}']"                                                                               );
 
 // BEGIN BANSHEE CHANGES
 

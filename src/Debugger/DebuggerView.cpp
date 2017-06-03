@@ -533,11 +533,11 @@ class DebuggerLog : public Log
     public:
 
         DebuggerLog(ReportView* reportView) :
-            reportView_{ reportView }
+            reportView_ { reportView }
         {
         }
 
-        void SumitReport(const Report& report) override
+        void SubmitReport(const Report& report) override
         {
             reportView_->AddReport(report, FullIndent());
         }

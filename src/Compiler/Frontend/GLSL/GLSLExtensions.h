@@ -25,7 +25,7 @@ see https://github.com/KhronosGroup/glslang/blob/master/glslang/MachineIndepende
 
 // Declares an extension string as 'static const char* E_<NAME> = "<NAME>"' where <NAME> is the specified identifier
 #define DECL_EXTENSION(NAME) \
-    static const char* E_##NAME = #NAME
+    static const char* const E_##NAME = #NAME
 
 // 3DL
 DECL_EXTENSION( GL_3DL_array_objects                            );
@@ -58,6 +58,7 @@ DECL_EXTENSION( GL_ARB_shader_ballot                            );
 DECL_EXTENSION( GL_ARB_shader_draw_parameters                   );
 DECL_EXTENSION( GL_ARB_shader_group_vote                        );
 DECL_EXTENSION( GL_ARB_shader_image_load_store                  );
+DECL_EXTENSION( GL_ARB_shader_storage_buffer_object             );
 DECL_EXTENSION( GL_ARB_shader_texture_image_samples             );
 DECL_EXTENSION( GL_ARB_shader_texture_lod                       );
 DECL_EXTENSION( GL_ARB_shader_viewport_layer_array              );

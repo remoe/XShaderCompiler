@@ -11,7 +11,6 @@
 #include "Exception.h"
 #include "Helper.h"
 #include "ReportIdents.h"
-#include "ConstExprEvaluator.h"
 
 namespace Xsc
 {
@@ -227,15 +226,9 @@ IMPLEMENT_VISIT_PROC(StructDecl)
     if (!ast->baseStructName.empty())
         ast->baseStructRef = FetchStructDeclFromIdent(ast->baseStructName);
 
-    if (!GetStructDeclStack().empty())
-    {
-        /* Mark structure as nested structure */
+    /* Mark nested structures */
+    if (InsideStructDecl())
         ast->flags << StructDecl::isNestedStruct;
-
-        /* Add reference of this structure to all parent structures */
-        for (auto parentStruct : GetStructDeclStack())
-            parentStruct->nestedStructDeclRefs.push_back(ast);
-    }
 
     /* Report warnings for member variables, that shadow a base member */
     if (WarnEnabled(Warnings::DeclarationShadowing) && ast->baseStructRef)
@@ -253,8 +246,13 @@ IMPLEMENT_VISIT_PROC(StructDecl)
         }
     }
 
-    /* Register struct identifier in symbol table */
-    Register(ast->ident, ast);
+    /* Connect anonymous structs to compatible struct type */
+    if (ast->IsAnonymous())
+        ast->compatibleStructRef = FindCompatibleStructDecl(*ast);
+
+    /* Register struct identifier in symbol table (don't override compatible structs) */
+    if (!ast->compatibleStructRef)
+        Register(ast->ident, ast);
 
     PushStructDecl(ast);
     {
@@ -269,6 +267,14 @@ IMPLEMENT_VISIT_PROC(StructDecl)
     }
     PopStructDecl();
     
+    /* Analyze type modifiers of member variables */
+    for (const auto& member : ast->varMembers)
+    {
+        auto typeSpecifier = member->typeSpecifier.get();
+        if (typeSpecifier->IsConstOrUniform() || typeSpecifier->isInput || typeSpecifier->isOutput)
+            Error(R_InvalidTypeModifierForMemberField, typeSpecifier);
+    }
+
     /* Report warning if structure is empty */
     if (WarnEnabled(Warnings::EmptyStatementBody) && ast->NumMemberVariables() == 0)
         Warning(R_TypeHasNoMemberVariables(ast->ToString()), ast);
@@ -299,13 +305,13 @@ IMPLEMENT_VISIT_PROC(FunctionDecl)
     AnalyzeSemanticFunctionReturn(ast->semantic);
 
     /* Visit attributes */
-    Visit(ast->attribs);
+    Visit(ast->declStmntRef->attribs);
 
     /* Visit function return type */
     Visit(ast->returnType);
 
     #ifdef XSC_ENABLE_LANGUAGE_EXT
-    AnalyzeExtAttributes(ast->attribs, ast->returnType->typeDenoter->GetSub());
+    AnalyzeExtAttributes(ast->declStmntRef->attribs, ast->returnType->typeDenoter->GetSub());
     #endif // XSC_ENABLE_LANGUAGE_EXT
 
     /* Analyze parameter type denoters (required before function can be registered in symbol table) */
@@ -380,7 +386,7 @@ IMPLEMENT_VISIT_PROC(UniformBufferDecl)
 
     // BEGIN BANSHEE CHANGES
 #ifdef XSC_ENABLE_LANGUAGE_EXT
-    for (const auto& attrib : ast->attribs)
+    for (const auto& attrib : ast->declStmntRef->attribs)
     {
         if (attrib->attributeType == AttributeType::Internal)
             ast->extModifiers |= ExtModifiers::Internal;
@@ -452,6 +458,12 @@ IMPLEMENT_VISIT_PROC(VarDeclStmnt)
             }
         }
     }
+}
+
+IMPLEMENT_VISIT_PROC(BasicDeclStmnt)
+{
+    /* Only visit declaration object (not attributes here) */
+    Visit(ast->declObject);
 }
 
 /* --- Statements --- */
@@ -635,7 +647,7 @@ IMPLEMENT_VISIT_PROC(ReturnStmnt)
 
         /* Analyze vector space of function return type and expression */
         if (extensions_(Extensions::SpaceAttribute) && returnTypeDen)
-            AnalyzeVectorSpaceAssign(ast->expr.get(), returnTypeDen->GetAliased());
+            AnalyzeVectorSpaceAssign(ast->expr.get(), returnTypeDen->GetAliased(), nullptr, true);
 
         #endif // XSC_ENABLE_LANGUAGE_EXT
     }
@@ -754,6 +766,9 @@ void HLSLAnalyzer::AnalyzeVarDeclLocal(VarDecl* varDecl, bool registerVarIdent)
         if (varDecl->structDeclRef)
             Error(R_MemberVarsCantHaveDefaultValues(varDecl->ToString()), varDecl->initializer.get());
 
+        /* Try to evaluate initializer expression */
+        varDecl->initializerValue = EvaluateOrDefault(*(varDecl->initializer));		
+		
         // BEGIN BANSHEE CHANGES
 
         if (auto baseTypeDen = varDecl->GetTypeDenoter()->As<BaseTypeDenoter>())
@@ -836,6 +851,14 @@ void HLSLAnalyzer::AnalyzeVarDeclLocal(VarDecl* varDecl, bool registerVarIdent)
         }
 
         // END BANSHEE CHANGES
+    }
+    else if (auto varDeclStmnt = varDecl->declStmntRef)
+    {
+        if (registerVarIdent && !InsideGlobalScope() && varDeclStmnt->typeSpecifier->IsConst() && !varDeclStmnt->flags(VarDeclStmnt::isParameter))
+        {
+            /* Local variables declared as constant must be initialized */
+            Error(R_MissingInitializerForConstant(varDecl->ident), varDecl);
+        }
     }
 }
 
@@ -1019,7 +1042,7 @@ void HLSLAnalyzer::AnalyzeCallExprFunction(
         }
     }
 
-    if (auto funcDecl = callExpr->funcDeclRef)
+    if (auto funcDecl = callExpr->GetFunctionDecl())
     {
         /* Check if static/non-static access is allowed */
         if (prefixExpr && AnalyzeStaticAccessExpr(prefixExpr, isStatic, callExpr))
@@ -1137,66 +1160,68 @@ void HLSLAnalyzer::AnalyzeCallExprIntrinsicPrimary(CallExpr* callExpr, const HLS
     //TODO: move this into a different file (maybe HLSLIntrinsics.cpp)
     static const std::vector<IntrinsicConversion> intrinsicConversions
     {
-        { T::AsUInt_1,                      3, T::AsUInt_3                      },
-        { T::Tex1D_2,                       4, T::Tex1D_4                       },
-        { T::Tex2D_2,                       4, T::Tex2D_4                       },
-        { T::Tex3D_2,                       4, T::Tex3D_4                       },
-        { T::TexCube_2,                     4, T::TexCube_4                     },
-        { T::Texture_Load_1,                2, T::Texture_Load_2                },
-        { T::Texture_Load_1,                3, T::Texture_Load_3                },
+        { T::AsUInt_1,                     3, T::AsUInt_3                     },
+        { T::Tex1D_2,                      4, T::Tex1D_4                      },
+        { T::Tex2D_2,                      4, T::Tex2D_4                      },
+        { T::Tex3D_2,                      4, T::Tex3D_4                      },
+        { T::TexCube_2,                    4, T::TexCube_4                    },
+        { T::Texture_Load_1,               2, T::Texture_Load_2               },
+        { T::Texture_Load_1,               3, T::Texture_Load_3               },
 
-        { T::Texture_Gather_2,              3, T::Texture_Gather_3              },
-        { T::Texture_Gather_2,              4, T::Texture_Gather_4              },
-        { T::Texture_GatherRed_2,           3, T::Texture_GatherRed_3           },
-        { T::Texture_GatherRed_2,           4, T::Texture_GatherRed_4 },
-        { T::Texture_GatherRed_2,           6, T::Texture_GatherRed_6           },
-        { T::Texture_GatherRed_2,           7, T::Texture_GatherRed_7           },
-        { T::Texture_GatherGreen_2,         3, T::Texture_GatherGreen_3         },
-        { T::Texture_GatherGreen_2,         4, T::Texture_GatherGreen_4         },
-        { T::Texture_GatherGreen_2,         6, T::Texture_GatherGreen_6         },
-        { T::Texture_GatherGreen_2,         7, T::Texture_GatherGreen_7         },
-        { T::Texture_GatherBlue_2,          3, T::Texture_GatherBlue_3          },
-        { T::Texture_GatherBlue_2,          4, T::Texture_GatherBlue_4          },
-        { T::Texture_GatherBlue_2,          6, T::Texture_GatherBlue_6          },
-        { T::Texture_GatherBlue_2,          7, T::Texture_GatherBlue_7          },
-        { T::Texture_GatherAlpha_2,         3, T::Texture_GatherAlpha_3         },
-        { T::Texture_GatherAlpha_2,         4, T::Texture_GatherAlpha_4         },
-        { T::Texture_GatherAlpha_2,         6, T::Texture_GatherAlpha_6         },
-        { T::Texture_GatherAlpha_2,         7, T::Texture_GatherAlpha_7         },
+        { T::Texture_Gather_2,             3, T::Texture_Gather_3             },
+        { T::Texture_Gather_2,             4, T::Texture_Gather_4             },
+        { T::Texture_GatherRed_2,          3, T::Texture_GatherRed_3          },
+        { T::Texture_GatherRed_2,          4, T::Texture_GatherRed_4          },
+        { T::Texture_GatherRed_2,          6, T::Texture_GatherRed_6          },
+        { T::Texture_GatherRed_2,          7, T::Texture_GatherRed_7          },
+        { T::Texture_GatherGreen_2,        3, T::Texture_GatherGreen_3        },
+        { T::Texture_GatherGreen_2,        4, T::Texture_GatherGreen_4        },
+        { T::Texture_GatherGreen_2,        6, T::Texture_GatherGreen_6        },
+        { T::Texture_GatherGreen_2,        7, T::Texture_GatherGreen_7        },
+        { T::Texture_GatherBlue_2,         3, T::Texture_GatherBlue_3         },
+        { T::Texture_GatherBlue_2,         4, T::Texture_GatherBlue_4         },
+        { T::Texture_GatherBlue_2,         6, T::Texture_GatherBlue_6         },
+        { T::Texture_GatherBlue_2,         7, T::Texture_GatherBlue_7         },
+        { T::Texture_GatherAlpha_2,        3, T::Texture_GatherAlpha_3        },
+        { T::Texture_GatherAlpha_2,        4, T::Texture_GatherAlpha_4        },
+        { T::Texture_GatherAlpha_2,        6, T::Texture_GatherAlpha_6        },
+        { T::Texture_GatherAlpha_2,        7, T::Texture_GatherAlpha_7        },
 
-        { T::Texture_GatherCmp_3,           4, T::Texture_GatherCmp_4           },
-        { T::Texture_GatherCmp_3,           5, T::Texture_GatherCmp_5           },
-        { T::Texture_GatherCmpRed_3,        4, T::Texture_GatherCmpRed_4        },
-        { T::Texture_GatherCmpRed_3,        5, T::Texture_GatherCmpRed_5        },
-        { T::Texture_GatherCmpRed_3,        7, T::Texture_GatherCmpRed_7        },
-        { T::Texture_GatherCmpRed_3,        8, T::Texture_GatherCmpRed_8        },
-        { T::Texture_GatherCmpGreen_3,      4, T::Texture_GatherCmpGreen_4      },
-        { T::Texture_GatherCmpGreen_3,      5, T::Texture_GatherCmpGreen_5      },
-        { T::Texture_GatherCmpGreen_3,      7, T::Texture_GatherCmpGreen_7      },
-        { T::Texture_GatherCmpGreen_3,      8, T::Texture_GatherCmpGreen_8      },
-        { T::Texture_GatherCmpBlue_3,       4, T::Texture_GatherCmpBlue_4       },
-        { T::Texture_GatherCmpBlue_3,       5, T::Texture_GatherCmpBlue_5       },
-        { T::Texture_GatherCmpBlue_3,       7, T::Texture_GatherCmpBlue_7       },
-        { T::Texture_GatherCmpBlue_3,       8, T::Texture_GatherCmpBlue_8       },
-        { T::Texture_GatherCmpAlpha_3,      4, T::Texture_GatherCmpAlpha_4      },
-        { T::Texture_GatherCmpAlpha_3,      5, T::Texture_GatherCmpAlpha_5      },
-        { T::Texture_GatherCmpAlpha_3,      7, T::Texture_GatherCmpAlpha_7      },
-        { T::Texture_GatherCmpAlpha_3,      8, T::Texture_GatherCmpAlpha_8      },
+        { T::Texture_GatherCmp_3,          4, T::Texture_GatherCmp_4          },
+        { T::Texture_GatherCmp_3,          5, T::Texture_GatherCmp_5          },
+        { T::Texture_GatherCmpRed_3,       4, T::Texture_GatherCmpRed_4       },
+        { T::Texture_GatherCmpRed_3,       5, T::Texture_GatherCmpRed_5       },
+        { T::Texture_GatherCmpRed_3,       7, T::Texture_GatherCmpRed_7       },
+        { T::Texture_GatherCmpRed_3,       8, T::Texture_GatherCmpRed_8       },
+        { T::Texture_GatherCmpGreen_3,     4, T::Texture_GatherCmpGreen_4     },
+        { T::Texture_GatherCmpGreen_3,     5, T::Texture_GatherCmpGreen_5     },
+        { T::Texture_GatherCmpGreen_3,     7, T::Texture_GatherCmpGreen_7     },
+        { T::Texture_GatherCmpGreen_3,     8, T::Texture_GatherCmpGreen_8     },
+        { T::Texture_GatherCmpBlue_3,      4, T::Texture_GatherCmpBlue_4      },
+        { T::Texture_GatherCmpBlue_3,      5, T::Texture_GatherCmpBlue_5      },
+        { T::Texture_GatherCmpBlue_3,      7, T::Texture_GatherCmpBlue_7      },
+        { T::Texture_GatherCmpBlue_3,      8, T::Texture_GatherCmpBlue_8      },
+        { T::Texture_GatherCmpAlpha_3,     4, T::Texture_GatherCmpAlpha_4     },
+        { T::Texture_GatherCmpAlpha_3,     5, T::Texture_GatherCmpAlpha_5     },
+        { T::Texture_GatherCmpAlpha_3,     7, T::Texture_GatherCmpAlpha_7     },
+        { T::Texture_GatherCmpAlpha_3,     8, T::Texture_GatherCmpAlpha_8     },
 
-        { T::Texture_Sample_2,              3, T::Texture_Sample_3              },
-        { T::Texture_Sample_2,              4, T::Texture_Sample_4              },
-        { T::Texture_Sample_2,              5, T::Texture_Sample_5              },
-        { T::Texture_SampleBias_3,          4, T::Texture_SampleBias_4          },
-        { T::Texture_SampleBias_3,          5, T::Texture_SampleBias_5          },
-        { T::Texture_SampleBias_3,          6, T::Texture_SampleBias_6          },
-        { T::Texture_SampleCmp_3,           4, T::Texture_SampleCmp_4           },
-        { T::Texture_SampleCmp_3,           5, T::Texture_SampleCmp_5           },
-        { T::Texture_SampleCmp_3,           6, T::Texture_SampleCmp_6           },
-        { T::Texture_SampleGrad_4,          5, T::Texture_SampleGrad_5          },
-        { T::Texture_SampleGrad_4,          6, T::Texture_SampleGrad_6          },
-        { T::Texture_SampleGrad_4,          7, T::Texture_SampleGrad_7          },
-        { T::Texture_SampleLevel_3,         4, T::Texture_SampleLevel_4         },
-        { T::Texture_SampleLevel_3,         5, T::Texture_SampleLevel_5         },
+        { T::Texture_Sample_2,             3, T::Texture_Sample_3             },
+        { T::Texture_Sample_2,             4, T::Texture_Sample_4             },
+        { T::Texture_Sample_2,             5, T::Texture_Sample_5             },
+        { T::Texture_SampleBias_3,         4, T::Texture_SampleBias_4         },
+        { T::Texture_SampleBias_3,         5, T::Texture_SampleBias_5         },
+        { T::Texture_SampleBias_3,         6, T::Texture_SampleBias_6         },
+        { T::Texture_SampleCmp_3,          4, T::Texture_SampleCmp_4          },
+        { T::Texture_SampleCmp_3,          5, T::Texture_SampleCmp_5          },
+        { T::Texture_SampleCmp_3,          6, T::Texture_SampleCmp_6          },
+        { T::Texture_SampleCmpLevelZero_3, 4, T::Texture_SampleCmpLevelZero_4 },
+        { T::Texture_SampleCmpLevelZero_3, 5, T::Texture_SampleCmpLevelZero_5 },
+        { T::Texture_SampleGrad_4,         5, T::Texture_SampleGrad_5         },
+        { T::Texture_SampleGrad_4,         6, T::Texture_SampleGrad_6         },
+        { T::Texture_SampleGrad_4,         7, T::Texture_SampleGrad_7         },
+        { T::Texture_SampleLevel_3,        4, T::Texture_SampleLevel_4        },
+        { T::Texture_SampleLevel_3,        5, T::Texture_SampleLevel_5        },
     };
 
     for (const auto& conversion : intrinsicConversions)
@@ -1216,13 +1241,13 @@ void HLSLAnalyzer::AnalyzeCallExprIntrinsicFromBufferType(const CallExpr* callEx
     const auto intrinsic = callExpr->intrinsic;
     const auto& ident = callExpr->ident;
 
-    if (IsTextureBufferType(bufferType))
+    if (IsImageBufferType(bufferType))
     {
         /* Check if texture intrinsic is used to texture buffer type */
         if (!IsTextureIntrinsic(intrinsic))
             Error(R_InvalidIntrinsicForTexture(ident), callExpr);
     }
-    else if (IsRWTextureBufferType(bufferType))
+    else if (IsRWImageBufferType(bufferType))
     {
         /* Check if image load/store intrinsic is used to RW-texture buffer type */
         if (!IsImageIntrinsic(intrinsic))
@@ -1245,7 +1270,7 @@ void HLSLAnalyzer::AnalyzeCallExprIntrinsicFromBufferType(const CallExpr* callEx
     }
 
     /* Ensure gather intrinsics are used only on supported types */
-    if (IsGatherIntrisic(intrinsic))
+    if (IsTextureGatherIntrisic(intrinsic))
     {
         switch (bufferType)
         {
@@ -1265,23 +1290,28 @@ void HLSLAnalyzer::AnalyzeCallExprIntrinsicFromBufferType(const CallExpr* callEx
     }
 
     /* Ensure load intrinsics are only used on supported types */
-    if (intrinsic == Intrinsic::Texture_Load_1)
+    switch (intrinsic)
     {
-        /* Sample index is required for MS textures */
-        if (bufferType == BufferType::Texture2DMS || bufferType == BufferType::Texture2DMSArray)
-            Error(R_InvalidClassIntrinsicForType(ident, BufferTypeToString(bufferType)), callExpr);
-    }
-    else if (intrinsic == Intrinsic::Texture_Load_2)
-    {
-        /* Buffer loads only support the one parameter version */
-        if (bufferType == BufferType::Buffer)
-            Error(R_InvalidClassIntrinsicForType(ident, BufferTypeToString(bufferType)), callExpr);
-    }
-    else if (intrinsic == Intrinsic::Texture_Load_3)
-    {
-        /* Sample index + offset overload is only supported for MS textures */
-        if (bufferType != BufferType::Texture2DMS && bufferType != BufferType::Texture2DMSArray)
-            Error(R_InvalidClassIntrinsicForType(ident, BufferTypeToString(bufferType)), callExpr);
+        case Intrinsic::Texture_Load_1:
+            /* Sample index is required for MS textures */
+            if (bufferType == BufferType::Texture2DMS || bufferType == BufferType::Texture2DMSArray)
+                Error(R_InvalidClassIntrinsicForType(ident, BufferTypeToString(bufferType)), callExpr);
+            break;
+
+        case Intrinsic::Texture_Load_2:
+            /* Buffer loads only support the one parameter version */
+            if (bufferType == BufferType::Buffer)
+                Error(R_InvalidClassIntrinsicForType(ident, BufferTypeToString(bufferType)), callExpr);
+            break;
+
+        case Intrinsic::Texture_Load_3:
+            /* Sample index + offset overload is only supported for MS textures */
+            if (bufferType != BufferType::Texture2DMS && bufferType != BufferType::Texture2DMSArray)
+                Error(R_InvalidClassIntrinsicForType(ident, BufferTypeToString(bufferType)), callExpr);
+            break;
+
+        default:
+            break;
     }
 }
 
@@ -1552,6 +1582,33 @@ void HLSLAnalyzer::AnalyzeArrayExpr(ArrayExpr* expr)
                 Error(R_ArrayIndexMustHaveBaseType(typeDenAliased.ToString()), arrayIndex.get());
         }
     }
+
+    /* Validate boundary of array indices */
+    if (WarnEnabled(Warnings::IndexBoundary))
+    {
+        if (auto prefixTypeDen = GetTypeDenoterFrom(expr->prefixExpr.get()))
+        {
+            if (auto prefixArrayTypeDen = prefixTypeDen->GetAliased().As<ArrayTypeDenoter>())
+            {
+                for (std::size_t i = 0, n = std::min(expr->arrayIndices.size(), prefixArrayTypeDen->arrayDims.size()); i < n; ++i)
+                {
+                    if (auto value = EvaluateOrDefault(*(expr->arrayIndices[i])))
+                    {
+                        /* Validate array index */
+                        try
+                        {
+                            auto arrayIdx = static_cast<int>(value.ToInt());
+                            prefixArrayTypeDen->arrayDims[i]->ValidateIndexBoundary(arrayIdx);
+                        }
+                        catch (const std::exception& e)
+                        {
+                            Warning(e.what(), expr->arrayIndices[i].get());
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 /* ----- Entry point ----- */
@@ -1579,7 +1636,7 @@ void HLSLAnalyzer::AnalyzeEntryPoint(FunctionDecl* funcDecl)
         AnalyzeEntryPointInputOutput(funcDecl);
 
         /* Analyze entry point attributes (also possibly missing attributes such as "numthreads" for compute shaders) */
-        AnalyzeEntryPointAttributes(funcDecl->attribs);
+        AnalyzeEntryPointAttributes(funcDecl->declStmntRef->attribs);
     }
 }
 
@@ -1621,6 +1678,32 @@ void HLSLAnalyzer::AnalyzeEntryPointInputOutput(FunctionDecl* funcDecl)
             outSemantics.push_back(funcDecl->semantic);
 
         AnalyzeEntryPointSemantics(funcDecl, inSemantics, outSemantics);
+    }
+
+    /* Override all output semantics of the function return type semantics */
+    if (funcDecl->semantic.IsValid() && !funcDecl->outputSemantics.Empty())
+    {
+        /* Start with semantic index of function return semantic */
+        auto semanticIndex = funcDecl->semantic.Index();
+
+        funcDecl->outputSemantics.ForEach(
+            [&](VarDecl* varDecl)
+            {
+                /* Ignore function parameters */
+                if (!varDecl->declStmntRef->flags(VarDeclStmnt::isParameter))
+                {
+                    /* Override semantic for non-parameters and increment semantic index */
+                    varDecl->semantic = IndexedSemantic(funcDecl->semantic, semanticIndex);
+                    ++semanticIndex;
+                }
+            }
+        );
+
+        funcDecl->outputSemantics.UpdateDistribution();
+
+        //TODO: currently only reset semantic when a non-system-value is used (WORKAROUND)
+        if (!funcDecl->semantic.IsSystemValue())
+            funcDecl->semantic.Reset();
     }
 
     /* Check if there are duplicate output semantics */
@@ -2077,7 +2160,7 @@ void HLSLAnalyzer::AnalyzeSecondaryEntryPoint(FunctionDecl* funcDecl, bool isPat
         AnalyzeEntryPointInputOutput(funcDecl);
 
         /* Analyze secondary entry point attributes */
-        AnalyzeSecondaryEntryPointAttributes(funcDecl->attribs);
+        AnalyzeSecondaryEntryPointAttributes(funcDecl->declStmntRef->attribs);
     }
 }
 

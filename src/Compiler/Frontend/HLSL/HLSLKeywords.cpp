@@ -6,16 +6,20 @@
  */
 
 #include "HLSLKeywords.h"
-#include "CiString.h"
+#include "Dictionary.h"
 #include "Helper.h"
 #include "ReportIdents.h"
 #include "Exception.h"
-#include <vector>
+#include "CiString.h"
 
 
 namespace Xsc
 {
 
+
+/* 
+ * Internal functions
+ */
 
 template <typename T>
 T MapKeywordToType(const std::map<std::string, T>& typeMap, const std::string& keyword, const std::string& typeName)
@@ -26,6 +30,16 @@ T MapKeywordToType(const std::map<std::string, T>& typeMap, const std::string& k
     else
         RuntimeErr(R_FailedToMapFromHLSLKeyword(keyword, typeName));
 }
+
+template <typename T>
+T MapKeywordToType(const Dictionary<T>& typeDict, const std::string& keyword, const std::string& typeName)
+{
+    if (auto type = typeDict.StringToEnum(keyword))
+        return *type;
+    else
+        RuntimeErr(R_FailedToMapFromHLSLKeyword(keyword, typeName));
+}
+
 
 /* ----- HLSL Keywords ----- */
 
@@ -252,6 +266,8 @@ static KeywordMapType GenerateKeywordMap()
 
         { "typedef",                 T::Typedef         },
         { "struct",                  T::Struct          },
+        { "class",                   T::Class           },
+      //{ "interface",               T::Interface       },
         { "register",                T::Register        },
         { "packoffset",              T::PackOffset      },
 
@@ -371,7 +387,6 @@ static KeywordMapType GenerateKeywordMap()
         { "virtual",                 T::Reserved        },
 
         { "interface",               T::Unsupported     },
-        { "class",                   T::Unsupported     },
     };
 }
 
@@ -419,7 +434,7 @@ const KeywordMapType& HLSLKeywordsExtCg()
 
 /* ----- DataType Mapping ----- */
 
-static std::map<std::string, DataType> GenerateDataTypeMap()
+static Dictionary<DataType> GenerateDataTypeDict()
 {
     using T = DataType;
 
@@ -615,17 +630,17 @@ static std::map<std::string, DataType> GenerateDataTypeMap()
     };
 }
 
-static const auto g_typeMapHLSL = GenerateDataTypeMap();
+static const auto g_dataTypeDictHLSL = GenerateDataTypeDict();
 
 DataType HLSLKeywordToDataType(const std::string& keyword)
 {
-    return MapKeywordToType(g_typeMapHLSL, keyword, R_DataType);
+    return MapKeywordToType(g_dataTypeDictHLSL, keyword, R_DataType);
 }
 
 
 /* ----- DataType Mapping (Cg) ----- */
 
-static std::map<std::string, DataType> GenerateCgDataTypeMap()
+static Dictionary<DataType> GenerateCgDataTypeDict()
 {
     using T = DataType;
 
@@ -651,20 +666,18 @@ static std::map<std::string, DataType> GenerateCgDataTypeMap()
     };
 }
 
-static const auto g_typeMapCg = GenerateCgDataTypeMap();
+static const auto g_dataTypeDictCg = GenerateCgDataTypeDict();
 
 DataType HLSLKeywordExtCgToDataType(const std::string& keyword)
 {
     /* Search data type in HLSL map */
-    auto it = g_typeMapHLSL.find(keyword);
-    if (it != g_typeMapHLSL.end())
-        return it->second;
+    if (auto type = g_dataTypeDictHLSL.StringToEnum(keyword))
+        return *type;
     else
     {
         /* Search data type in Cg map */
-        auto it = g_typeMapCg.find(keyword);
-        if (it != g_typeMapCg.end())
-            return it->second;
+        if (auto type = g_dataTypeDictCg.StringToEnum(keyword))
+            return *type;
         else
             RuntimeErr(R_FailedToMapFromCgKeyword(keyword, R_DataType));
     }
@@ -673,7 +686,7 @@ DataType HLSLKeywordExtCgToDataType(const std::string& keyword)
 
 /* ----- PrimitiveType Mapping ----- */
 
-static std::map<std::string, PrimitiveType> GeneratePrimitiveTypeMap()
+static Dictionary<PrimitiveType> GeneratePrimitiveTypeDict()
 {
     using T = PrimitiveType;
 
@@ -689,38 +702,38 @@ static std::map<std::string, PrimitiveType> GeneratePrimitiveTypeMap()
 
 PrimitiveType HLSLKeywordToPrimitiveType(const std::string& keyword)
 {
-    static const auto typeMap = GeneratePrimitiveTypeMap();
-    return MapKeywordToType(typeMap, keyword, R_PrimitiveType);
+    static const auto typeDict = GeneratePrimitiveTypeDict();
+    return MapKeywordToType(typeDict, keyword, R_PrimitiveType);
 }
 
 
 /* ----- StorageClass Mapping ----- */
 
-static std::map<std::string, StorageClass> GenerateStorageClassMap()
+static Dictionary<StorageClass> GenerateStorageClassDict()
 {
     using T = StorageClass;
 
     return
     {
-        { "extern",          T::Extern          },
-        { "precise",         T::Precise         },
-        { "shared",          T::Shared          },
-        { "groupshared",     T::GroupShared     },
-        { "static",          T::Static          },
-        { "volatile",        T::Volatile        },
+        { "extern",      T::Extern      },
+        { "precise",     T::Precise     },
+        { "shared",      T::Shared      },
+        { "groupshared", T::GroupShared },
+        { "static",      T::Static      },
+        { "volatile",    T::Volatile    },
     };
 }
 
 StorageClass HLSLKeywordToStorageClass(const std::string& keyword)
 {
-    static const auto typeMap = GenerateStorageClassMap();
-    return MapKeywordToType(typeMap, keyword, R_StorageClass);
+    static const auto typeDict = GenerateStorageClassDict();
+    return MapKeywordToType(typeDict, keyword, R_StorageClass);
 }
 
 
 /* ----- InterpModifier Mapping ----- */
 
-static std::map<std::string, InterpModifier> GenerateInterpModifierMap()
+static Dictionary<InterpModifier> GenerateInterpModifierDict()
 {
     using T = InterpModifier;
 
@@ -736,14 +749,14 @@ static std::map<std::string, InterpModifier> GenerateInterpModifierMap()
 
 InterpModifier HLSLKeywordToInterpModifier(const std::string& keyword)
 {
-    static const auto typeMap = GenerateInterpModifierMap();
-    return MapKeywordToType(typeMap, keyword, R_InterpModifier);
+    static const auto typeDict = GenerateInterpModifierDict();
+    return MapKeywordToType(typeDict, keyword, R_InterpModifier);
 }
 
 
 /* ----- TypeModifier Mapping ----- */
 
-static std::map<std::string, TypeModifier> GenerateTypeModifierMap()
+static Dictionary<TypeModifier> GenerateTypeModifierDict()
 {
     using T = TypeModifier;
 
@@ -760,14 +773,14 @@ static std::map<std::string, TypeModifier> GenerateTypeModifierMap()
 
 TypeModifier HLSLKeywordToTypeModifier(const std::string& keyword)
 {
-    static const auto typeMap = GenerateTypeModifierMap();
-    return MapKeywordToType(typeMap, keyword, R_TypeModifier);
+    static const auto typeDict = GenerateTypeModifierDict();
+    return MapKeywordToType(typeDict, keyword, R_TypeModifier);
 }
 
 
 /* ----- BufferType Mapping ----- */
 
-static std::map<std::string, UniformBufferType> GenerateUniformBufferTypeMap()
+static Dictionary<UniformBufferType> GenerateUniformBufferTypeDict()
 {
     using T = UniformBufferType;
 
@@ -780,14 +793,14 @@ static std::map<std::string, UniformBufferType> GenerateUniformBufferTypeMap()
 
 UniformBufferType HLSLKeywordToUniformBufferType(const std::string& keyword)
 {
-    static const auto typeMap = GenerateUniformBufferTypeMap();
-    return MapKeywordToType(typeMap, keyword, R_BufferType);
+    static const auto typeDict = GenerateUniformBufferTypeDict();
+    return MapKeywordToType(typeDict, keyword, R_BufferType);
 }
 
 
 /* ----- BufferType Mapping ----- */
 
-static std::map<std::string, BufferType> GenerateBufferTypeMap()
+static Dictionary<BufferType> GenerateBufferTypeDict()
 {
     using T = BufferType;
 
@@ -832,14 +845,14 @@ static std::map<std::string, BufferType> GenerateBufferTypeMap()
 
 BufferType HLSLKeywordToBufferType(const std::string& keyword)
 {
-    static const auto typeMap = GenerateBufferTypeMap();
-    return MapKeywordToType(typeMap, keyword, R_BufferType);
+    static const auto typeDict = GenerateBufferTypeDict();
+    return MapKeywordToType(typeDict, keyword, R_BufferType);
 }
 
 
 /* ----- SamplerType Mapping ----- */
 
-static std::map<std::string, SamplerType> GenerateSamplerTypeMap()
+static Dictionary<SamplerType> GenerateSamplerTypeDict()
 {
     using T = SamplerType;
 
@@ -852,23 +865,23 @@ static std::map<std::string, SamplerType> GenerateSamplerTypeMap()
         { "sampler1DShadow",        T::Sampler1DShadow        },
         { "sampler2DShadow",        T::Sampler2DShadow        },
 
+        { "SamplerState",           T::SamplerState           },
         { "sampler",                T::SamplerState           },
         { "sampler_state",          T::SamplerState           },
-        { "SamplerState",           T::SamplerState           },
         { "SamplerComparisonState", T::SamplerComparisonState },
     };
 }
 
 SamplerType HLSLKeywordToSamplerType(const std::string& keyword)
 {
-    static const auto typeMap = GenerateSamplerTypeMap();
-    return MapKeywordToType(typeMap, keyword, R_SamplerType);
+    static const auto typeDict = GenerateSamplerTypeDict();
+    return MapKeywordToType(typeDict, keyword, R_SamplerType);
 }
 
 
 /* ----- AttributeType Mapping ----- */
 
-static std::map<std::string, AttributeType> GenerateAttributeTypeMap()
+static Dictionary<AttributeType> GenerateAttributeTypeDict()
 {
     using T = AttributeType;
 
@@ -921,15 +934,14 @@ static std::map<std::string, AttributeType> GenerateAttributeTypeMap()
 
 AttributeType HLSLKeywordToAttributeType(const std::string& keyword)
 {
-    static const auto typeMap = GenerateAttributeTypeMap();
-    auto it = typeMap.find(keyword);
-    return (it != typeMap.end() ? it->second : AttributeType::Undefined);
+    static const auto typeDict = GenerateAttributeTypeDict();
+    return typeDict.StringToEnumOrDefault(keyword, AttributeType::Undefined);
 }
 
 
 /* ----- AttributeValue Mapping ----- */
 
-static std::map<std::string, AttributeValue> GenerateAttributeValueMap()
+static Dictionary<AttributeValue> GenerateAttributeValueDict()
 {
     using T = AttributeValue;
 
@@ -953,9 +965,8 @@ static std::map<std::string, AttributeValue> GenerateAttributeValueMap()
 
 AttributeValue HLSLKeywordToAttributeValue(const std::string& keyword)
 {
-    static const auto typeMap = GenerateAttributeValueMap();
-    auto it = typeMap.find(keyword);
-    return (it != typeMap.end() ? it->second : AttributeValue::Undefined);
+    static const auto typeMap = GenerateAttributeValueDict();
+    return typeMap.StringToEnumOrDefault(keyword, AttributeValue::Undefined);
 }
 
 
@@ -964,8 +975,8 @@ AttributeValue HLSLKeywordToAttributeValue(const std::string& keyword)
 struct HLSLSemanticDescriptor
 {
     inline HLSLSemanticDescriptor(const Semantic semantic, bool hasIndex = false) :
-        semantic{ semantic },
-        hasIndex{ hasIndex }
+        semantic { semantic },
+        hasIndex { hasIndex }
     {
     }
 
@@ -1082,7 +1093,7 @@ IndexedSemantic HLSLKeywordToSemantic(const std::string& ident, bool useD3D10Sem
 
 /* ----- ImageLayoutFormat Mapping ----- */
 
-static std::map<std::string, ImageLayoutFormat> GenerateImageLayoutFormatMap()
+static Dictionary<ImageLayoutFormat> GenerateImageLayoutFormatDict()
 {
     using T = ImageLayoutFormat;
 
@@ -1136,9 +1147,8 @@ static std::map<std::string, ImageLayoutFormat> GenerateImageLayoutFormatMap()
 
 ImageLayoutFormat ExtHLSLKeywordToImageLayoutFormat(const std::string& keyword)
 {
-    static const auto typeMap = GenerateImageLayoutFormatMap();
-    auto it = typeMap.find(keyword);
-    return (it != typeMap.end() ? it->second : ImageLayoutFormat::Undefined);
+    static const auto typeDict = GenerateImageLayoutFormatDict();
+    return typeDict.StringToEnumOrDefault(keyword, ImageLayoutFormat::Undefined);
 }
 
 // BEGIN BANSHEE CHANGES

@@ -76,23 +76,26 @@ namespace Xsc
 {
 
 
+/* ===== Public structures ===== */
+
 //! Compiler warning flags.
 struct Warnings
 {
     enum : unsigned int
     {
-        Basic                   = (1 << 0), //!< Warning for basic issues (control path, disabled code etc.).
-        Syntax                  = (1 << 1), //!< Warning for syntactic issues.
-        PreProcessor            = (1 << 2), //!< Warning for pre-processor issues.
-        UnusedVariables         = (1 << 3), //!< Warning for unused variables.
-        EmptyStatementBody      = (1 << 4), //!< Warning for statements with empty body.
-        ImplicitTypeConversions = (1 << 5), //!< Warning for specific implicit type conversions.
-        DeclarationShadowing    = (1 << 6), //!< Warning for declarations that shadow a previous local (e.g. for-loops or variables in class hierarchy).
-        UnlocatedObjects        = (1 << 7), //!< Warning for optional objects that where not found.
-        RequiredExtensions      = (1 << 8), //!< Warning for required extensions in the output code.
-        CodeReflection          = (1 << 9), //!< Warning for issues during code reflection.
+        Basic                   = (1 <<  0), //!< Warning for basic issues (control path, disabled code etc.).
+        Syntax                  = (1 <<  1), //!< Warning for syntactic issues.
+        PreProcessor            = (1 <<  2), //!< Warning for pre-processor issues.
+        UnusedVariables         = (1 <<  3), //!< Warning for unused variables.
+        EmptyStatementBody      = (1 <<  4), //!< Warning for statements with empty body.
+        ImplicitTypeConversions = (1 <<  5), //!< Warning for specific implicit type conversions.
+        DeclarationShadowing    = (1 <<  6), //!< Warning for declarations that shadow a previous local (e.g. for-loops or variables in class hierarchy).
+        UnlocatedObjects        = (1 <<  7), //!< Warning for optional objects that where not found.
+        RequiredExtensions      = (1 <<  8), //!< Warning for required extensions in the output code.
+        CodeReflection          = (1 <<  9), //!< Warning for issues during code reflection.
+        IndexBoundary           = (1 << 10), //!< Warning for index boundary violations.
 
-        All                     = (~0u),    //!< All warnings.
+        All                     = (~0u),     //!< All warnings.
     };
 };
 
@@ -160,6 +163,7 @@ struct Options
     //! If true, little code optimizations are performed. By default false.
     bool    optimize                = false;
 
+    //TODO: maybe merge this option with "optimize" (preferWrappers == !optimize)
     //! If true, intrinsics are prefered to be implemented as wrappers (instead of inlining). By default false.
     bool    preferWrappers          = false;
 
@@ -184,6 +188,7 @@ struct Options
     //! If true, the timings of the different compilation processes are written to the log output. By default false.
     bool    showTimes               = false;
 
+    //TODO: remove this option, and determine automatically when unrolling initializers are required!
     //! If true, array initializations will be unrolled. By default false.
     bool    unrollArrayInitializers = false;
 
@@ -319,6 +324,28 @@ struct ShaderOutput
     NameMangling                nameMangling;
 };
 
+//! Descriptor structure for the shader disassembler.
+struct AssemblyDescriptor
+{
+    //! Specifies the intermediate language of the assembly input code. Currently only SPIR-V is supported. By default IntermediateLanguage::SPIRV.
+    IntermediateLanguage    intermediateLanguage    = IntermediateLanguage::SPIRV;
+
+    //! Specifies the prefix character to be used for ID numbers in the SPIR-V instructions.
+    char                    idPrefixChar            = '%';
+
+    //! Specifies whether to show the module header or not. By default true.
+    bool                    showHeader              = true;
+
+    //! Specifies whether to show the instruction byte offsets in the disassembly or not. By default true.
+    bool                    showOffsets             = true;
+
+    //! Specifies whether to indent the instruction operands or not. By default true.
+    bool                    indentOperands          = true;
+};
+
+
+/* ===== Public functions ===== */
+
 /**
 \brief Cross compiles the shader code from the specified input stream into the specified output shader code.
 \param[in] inputDesc Input shader code descriptor.
@@ -337,6 +364,20 @@ XSC_EXPORT bool CompileShader(
     const ShaderOutput&         outputDesc,
     Log*                        log             = nullptr,
     Reflection::ReflectionData* reflectionData  = nullptr
+);
+
+/**
+\brief Disassembles the SPIR-V binary code into a human readable code.
+\param[in,out] streamIn Specifies the input stream of the SPIR-V binary code.
+\param[in,out] streamOut Specifies the output stream of the human readable code.
+\param[in] formatting Specifies the output formatting.
+\throws std::runtime_error If the disassembling failed.
+\throws std::invalid_argument If 'desc.intermediateLanguage' has an invalid value.
+*/
+XSC_EXPORT void DisassembleShader(
+    std::istream&               streamIn,
+    std::ostream&               streamOut,
+    const AssemblyDescriptor&   desc = {}
 );
 
 

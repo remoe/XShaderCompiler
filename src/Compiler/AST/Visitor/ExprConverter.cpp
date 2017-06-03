@@ -18,12 +18,62 @@ namespace Xsc
 {
 
 
-void ExprConverter::Convert(Program& program, const Flags& conversionFlags)
+void ExprConverter::Convert(Program& program, const Flags& conversionFlags, const NameMangling& nameMangling)
 {
+    /* Copy parameters */
+    conversionFlags_    = conversionFlags;
+    nameMangling_       = nameMangling;
+
     /* Visit program AST */
-    conversionFlags_ = conversionFlags;
     if (conversionFlags_ != 0)
         Visit(&program);
+}
+
+// Returns the data type to which an expression must be casted, if the target data type and the source data type are incompatible.
+static std::unique_ptr<DataType> MustCastExprToDataType(const DataType targetType, const DataType sourceType, bool matchTypeSize)
+{
+    /* Check for type mismatch */
+    const auto targetDim = VectorTypeDim(targetType);
+    const auto sourceDim = VectorTypeDim(sourceType);
+
+    if ( ( targetDim != sourceDim && matchTypeSize ) ||
+         ( IsBooleanType   (targetType) != IsBooleanType   (sourceType) ) ||
+         ( IsUIntType      (targetType) && IsIntType       (sourceType) ) ||
+         ( IsIntType       (targetType) && IsUIntType      (sourceType) ) ||
+         ( IsRealType      (targetType) && IsIntegralType  (sourceType) ) ||
+         ( IsIntegralType  (targetType) && IsRealType      (sourceType) ) ||
+         ( IsDoubleRealType(targetType) != IsDoubleRealType(sourceType) ) )
+    {
+        if (targetDim != sourceDim && !matchTypeSize)
+        {
+            /* Return target base type with source dimension as required cast type */
+            return MakeUnique<DataType>(VectorDataType(BaseDataType(targetType), VectorTypeDim(sourceType)));
+        }
+        else
+        {
+            /* Return target type as required cast type */
+            return MakeUnique<DataType>(targetType);
+        }
+    }
+
+    /* No type cast required */
+    return nullptr;
+}
+
+static std::unique_ptr<DataType> MustCastExprToDataType(const TypeDenoter& targetTypeDen, const TypeDenoter& sourceTypeDen, bool matchTypeSize)
+{
+    if (auto baseTargetTypeDen = targetTypeDen.As<BaseTypeDenoter>())
+    {
+        if (auto baseSourceTypeDen = sourceTypeDen.As<BaseTypeDenoter>())
+        {
+            return MustCastExprToDataType(
+                baseTargetTypeDen->dataType,
+                baseSourceTypeDen->dataType,
+                matchTypeSize
+            );
+        }
+    }
+    return nullptr;
 }
 
 static void ConvertCastExpr(ExprPtr& expr, const DataType sourceType, const DataType targetType)
@@ -36,13 +86,14 @@ static void ConvertCastExpr(ExprPtr& expr, const DataType sourceType, const Data
 
         if (sourceDim < targetDim)
         {
+            /* Convert to cast expression and extend type constructor with sequential zero-literals (e.g. 'float3(v4)' => 'float4(v4, 0)') */
             auto typeDenoter = std::make_shared<BaseTypeDenoter>(targetType);
 
             std::vector<ExprPtr> args;
             args.push_back(expr);
 
             auto baseDataType = BaseDataType(targetType);
-            for (int i = sourceDim; i < targetDim; i++)
+            for (auto i = sourceDim; i < targetDim; ++i)
                 args.push_back(ASTFactory::MakeLiteralExpr(baseDataType, "0"));
 
             expr = ASTFactory::MakeTypeCtorCallExpr(typeDenoter, args);
@@ -63,25 +114,31 @@ static void ConvertCastExpr(ExprPtr& expr, const DataType sourceType, const Data
 // Converts the expression to a cast expression if it is required for the specified target type.
 void ExprConverter::ConvertExprIfCastRequired(ExprPtr& expr, const DataType targetType, bool matchTypeSize)
 {
-    const auto& sourceTypeDen = expr->GetTypeDenoter()->GetAliased();
-    if (auto baseSourceTypeDen = sourceTypeDen.As<BaseTypeDenoter>())
+    if (expr)
     {
-        if (auto dataType = MustCastExprToDataType(targetType, baseSourceTypeDen->dataType, matchTypeSize))
-            ConvertCastExpr(expr, baseSourceTypeDen->dataType, *dataType);
+        const auto& sourceTypeDen = expr->GetTypeDenoter()->GetAliased();
+        if (auto baseSourceTypeDen = sourceTypeDen.As<BaseTypeDenoter>())
+        {
+            if (auto dataType = MustCastExprToDataType(targetType, baseSourceTypeDen->dataType, matchTypeSize))
+                ConvertCastExpr(expr, baseSourceTypeDen->dataType, *dataType);
+        }
     }
 }
 
 void ExprConverter::ConvertExprIfCastRequired(ExprPtr& expr, const TypeDenoter& targetTypeDen, bool matchTypeSize)
 {
-    const auto& sourceTypeDen = expr->GetTypeDenoter()->GetAliased();
-    if (auto dataType = MustCastExprToDataType(targetTypeDen, sourceTypeDen, matchTypeSize))
+    if (expr)
     {
-        if (auto baseSourceTypeDen = sourceTypeDen.As<BaseTypeDenoter>())
-            ConvertCastExpr(expr, baseSourceTypeDen->dataType, *dataType);
-        else
+        const auto& sourceTypeDen = expr->GetTypeDenoter()->GetAliased();
+        if (auto dataType = MustCastExprToDataType(targetTypeDen, sourceTypeDen, matchTypeSize))
         {
-            /* Convert to cast expression with target data type if required */
-            expr = ASTFactory::ConvertExprBaseType(*dataType, expr);
+            if (auto baseSourceTypeDen = sourceTypeDen.As<BaseTypeDenoter>())
+                ConvertCastExpr(expr, baseSourceTypeDen->dataType, *dataType);
+            else
+            {
+                /* Convert to cast expression with target data type if required */
+                expr = ASTFactory::ConvertExprBaseType(*dataType, expr);
+            }
         }
     }
 }
@@ -100,127 +157,322 @@ int ExprConverter::GetTextureDimFromExpr(Expr* expr, const AST* ast)
         if (auto bufferTypeDen = typeDen.As<BufferTypeDenoter>())
         {
             /* Determine vector size for texture intrinsic parameters by texture buffer type */
-            switch (bufferTypeDen->bufferType)
-            {
-                case BufferType::Buffer:
-                case BufferType::RWBuffer:
-                case BufferType::Texture1D:
-                case BufferType::RWTexture1D:
-                    return 1;
-
-                case BufferType::Texture1DArray:
-                case BufferType::RWTexture1DArray:
-                case BufferType::Texture2D:
-                case BufferType::RWTexture2D:
-                case BufferType::Texture2DMS:
-                    return 2;
-
-                case BufferType::Texture2DArray:
-                case BufferType::RWTexture2DArray:
-                case BufferType::Texture2DMSArray:
-                case BufferType::Texture3D:
-                case BufferType::RWTexture3D:
-                case BufferType::TextureCube:
-                    return 3;
-
-                case BufferType::TextureCubeArray:
-                    return 4;
-
-                default:
-                    break;
-            }
+            if (auto textureDim = GetBufferTypeTextureDim(bufferTypeDen->bufferType))
+                return textureDim;
         }
         else if (auto samplerTypeDen = typeDen.As<SamplerTypeDenoter>())
         {
             /* Determine vector size for texture intrinsic parameters by sampler type */
-            switch (samplerTypeDen->samplerType)
-            {
-                case SamplerType::Sampler1D:
-                case SamplerType::SamplerBuffer:
-                case SamplerType::Sampler1DShadow:
-                    return 1;
-
-                case SamplerType::Sampler2D:
-                case SamplerType::Sampler2DRect:
-                case SamplerType::Sampler1DArray:
-                case SamplerType::Sampler2DMS:
-                case SamplerType::Sampler2DShadow:
-                case SamplerType::Sampler2DRectShadow:
-                case SamplerType::Sampler1DArrayShadow:
-                    return 2;
-
-                case SamplerType::Sampler3D:
-                case SamplerType::SamplerCube:
-                case SamplerType::Sampler2DArray:
-                case SamplerType::Sampler2DMSArray:
-                case SamplerType::SamplerCubeShadow:
-                case SamplerType::Sampler2DArrayShadow:
-                    return 3;
-
-                case SamplerType::SamplerCubeArray:
-                case SamplerType::SamplerCubeArrayShadow:
-                    return 4;
-
-                default:
-                    break;
-            }
+            if (auto textureDim = GetSamplerTypeTextureDim(samplerTypeDen->samplerType))
+                return textureDim;
         }
         RuntimeErr(R_FailedToGetTextureDim, ast);
     }
     RuntimeErr(R_FailedToGetTextureDim, ast);
 }
 
+std::string ExprConverter::GetMatrixSubscriptWrapperIdent(const NameMangling& nameMangling, const MatrixSubscriptUsage& subscriptUsage)
+{
+    return (nameMangling.temporaryPrefix + "subscript" + subscriptUsage.IndicesToString());
+}
+
+
 /*
  * ======= Private: =======
  */
 
-std::unique_ptr<DataType> ExprConverter::MustCastExprToDataType(const DataType targetType, const DataType sourceType, bool matchTypeSize)
+/* ------- Visit functions ------- */
+
+#define IMPLEMENT_VISIT_PROC(AST_NAME) \
+    void ExprConverter::Visit##AST_NAME(AST_NAME* ast, void* args)
+
+/* --- Declarations --- */
+
+IMPLEMENT_VISIT_PROC(VarDecl)
 {
-    /* Check for type mismatch */
-    auto targetDim = VectorTypeDim(targetType);
-    auto sourceDim = VectorTypeDim(sourceType);
-
-    if ( ( targetDim != sourceDim && matchTypeSize ) ||
-         (  IsUIntType      (targetType) &&  IsIntType       (sourceType) ) ||
-         (  IsIntType       (targetType) &&  IsUIntType      (sourceType) ) ||
-         (  IsRealType      (targetType) &&  IsIntegralType  (sourceType) ) ||
-         (  IsIntegralType  (targetType) &&  IsRealType      (sourceType) ) ||
-         ( !IsDoubleRealType(targetType) &&  IsDoubleRealType(sourceType) ) ||
-         (  IsDoubleRealType(targetType) && !IsDoubleRealType(sourceType) ) )
+    if (ast->initializer)
     {
-        if (targetDim != sourceDim && !matchTypeSize)
+        ConvertExpr(ast->initializer, AllPreVisit);
         {
-            /* Return target base type with source dimension as required cast type */
-            return MakeUnique<DataType>(VectorDataType(BaseDataType(targetType), VectorTypeDim(sourceType)));
+            VISIT_DEFAULT(VarDecl);
         }
-        else
-        {
-            /* Return target type as required cast type */
-            return MakeUnique<DataType>(targetType);
-        }
-    }
+        ConvertExpr(ast->initializer, AllPostVisit);
 
-    /* No type cast required */
-    return nullptr;
+        ConvertExprTargetType(ast->initializer, ast->GetTypeDenoter()->GetAliased());
+    }
+    else
+        VISIT_DEFAULT(VarDecl);
 }
 
-std::unique_ptr<DataType> ExprConverter::MustCastExprToDataType(const TypeDenoter& targetTypeDen, const TypeDenoter& sourceTypeDen, bool matchTypeSize)
+/* --- Declaration statements --- */
+
+IMPLEMENT_VISIT_PROC(FunctionDecl)
 {
-    if (auto baseTargetTypeDen = targetTypeDen.As<BaseTypeDenoter>())
+    PushFunctionDecl(ast);
     {
-        if (auto baseSourceTypeDen = sourceTypeDen.As<BaseTypeDenoter>())
-        {
-            return MustCastExprToDataType(
-                baseTargetTypeDen->dataType,
-                baseSourceTypeDen->dataType,
-                matchTypeSize
-            );
-        }
+        VISIT_DEFAULT(FunctionDecl);
     }
-    return nullptr;
+    PopFunctionDecl();
 }
 
-TypeDenoterPtr ExprConverter::MakeBufferAccessCallTypeDenoter(const DataType genericDataType)
+/* --- Statements --- */
+
+IMPLEMENT_VISIT_PROC(ForLoopStmnt)
+{
+    ConvertExpr(ast->condition, AllPreVisit);
+    ConvertExpr(ast->iteration, AllPreVisit);
+    {
+        VISIT_DEFAULT(ForLoopStmnt);
+    }
+    ConvertExpr(ast->condition, AllPostVisit);
+    ConvertExpr(ast->iteration, AllPostVisit);
+}
+
+IMPLEMENT_VISIT_PROC(WhileLoopStmnt)
+{
+    ConvertExpr(ast->condition, AllPreVisit);
+    {
+        VISIT_DEFAULT(WhileLoopStmnt);
+    }
+    ConvertExpr(ast->condition, AllPostVisit);
+}
+
+IMPLEMENT_VISIT_PROC(DoWhileLoopStmnt)
+{
+    ConvertExpr(ast->condition, AllPreVisit);
+    {
+        VISIT_DEFAULT(DoWhileLoopStmnt);
+    }
+    ConvertExpr(ast->condition, AllPostVisit);
+}
+
+IMPLEMENT_VISIT_PROC(IfStmnt)
+{
+    ConvertExpr(ast->condition, AllPreVisit);
+    {
+        VISIT_DEFAULT(IfStmnt);
+    }
+    ConvertExpr(ast->condition, AllPostVisit);
+}
+
+IMPLEMENT_VISIT_PROC(SwitchStmnt)
+{
+    ConvertExpr(ast->selector, AllPreVisit);
+    {
+        VISIT_DEFAULT(SwitchStmnt);
+    }
+    ConvertExpr(ast->selector, AllPostVisit);
+}
+
+IMPLEMENT_VISIT_PROC(ExprStmnt)
+{
+    ConvertExpr(ast->expr, AllPreVisit);
+    {
+        VISIT_DEFAULT(ExprStmnt);
+    }
+    ConvertExpr(ast->expr, AllPostVisit);
+}
+
+IMPLEMENT_VISIT_PROC(ReturnStmnt)
+{
+    if (ast->expr)
+    {
+        ConvertExpr(ast->expr, AllPreVisit);
+        {
+            VISIT_DEFAULT(ReturnStmnt);
+        }
+        ConvertExpr(ast->expr, AllPostVisit);
+
+        if (auto funcDecl = ActiveFunctionDecl())
+            ConvertExprTargetType(ast->expr, funcDecl->returnType->GetTypeDenoter()->GetAliased());
+    }
+}
+
+/* --- Expressions --- */
+
+IMPLEMENT_VISIT_PROC(LiteralExpr)
+{
+    if (conversionFlags_(ConvertLiteralHalfToFloat))
+    {
+        /* Convert half to float literal (e.g. "0.0h" to "0.0f") */
+        if (ast->dataType == DataType::Half)
+            ast->ConvertDataType(DataType::Float);
+    }
+}
+
+IMPLEMENT_VISIT_PROC(TernaryExpr)
+{
+    ConvertExpr(ast->condExpr, AllPreVisit);
+    ConvertExpr(ast->thenExpr, AllPreVisit);
+    ConvertExpr(ast->elseExpr, AllPreVisit);
+    {
+        VISIT_DEFAULT(TernaryExpr);
+    }
+    ConvertExpr(ast->condExpr, AllPostVisit);
+    ConvertExpr(ast->thenExpr, AllPostVisit);
+    ConvertExpr(ast->elseExpr, AllPostVisit);
+
+    /* Convert condition expression if cast required */
+    ExprConverter::ConvertExprIfCastRequired(ast->condExpr, DataType::Bool, false);
+}
+
+// Convert right-hand-side expression (if cast required)
+IMPLEMENT_VISIT_PROC(BinaryExpr)
+{
+    ConvertExpr(ast->lhsExpr, AllPreVisit);
+    ConvertExpr(ast->rhsExpr, AllPreVisit);
+    {
+        VISIT_DEFAULT(BinaryExpr);
+    }
+    ConvertExpr(ast->lhsExpr, AllPostVisit);
+    ConvertExpr(ast->rhsExpr, AllPostVisit);
+
+    /* Convert sub expressions if cast required, then reset type denoter */
+    auto lhsTypeDen = ast->lhsExpr->GetTypeDenoter()->GetSub();
+    auto rhsTypeDen = ast->rhsExpr->GetTypeDenoter()->GetSub();
+
+    auto commonTypeDen = TypeDenoter::FindCommonTypeDenoter(lhsTypeDen, rhsTypeDen);
+
+    /* Ensure type sizes are cast only if necessary */
+    bool matchTypeSize = true;
+    if (ast->op == BinaryOp::Div)
+    {
+        if (rhsTypeDen->IsScalar())
+            matchTypeSize = false;
+    }
+    else if (ast->op == BinaryOp::Mul)
+    {
+        if (lhsTypeDen->IsScalar() || rhsTypeDen->IsScalar())
+            matchTypeSize = false;
+    }
+
+    ConvertExprTargetType(ast->lhsExpr, *commonTypeDen, matchTypeSize);
+    ConvertExprTargetType(ast->rhsExpr, *commonTypeDen, matchTypeSize);
+
+    ast->ResetTypeDenoter();
+}
+
+// Wrap unary expression if the next sub expression is again an unary expression
+IMPLEMENT_VISIT_PROC(UnaryExpr)
+{
+    ConvertExpr(ast->expr, AllPreVisit);
+    {
+        VISIT_DEFAULT(UnaryExpr);
+    }
+    ConvertExpr(ast->expr, AllPostVisit);
+
+    if (ast->expr->Type() == AST::Types::UnaryExpr)
+        ConvertExpr(ast->expr, ConvertUnaryExpr);
+}
+
+IMPLEMENT_VISIT_PROC(CallExpr)
+{
+    /* Interlocked (atomic) intristics require actual buffer, and not their contents */
+    Flags preVisitFlags = AllPreVisit;
+    if (IsInterlockedIntristic(ast->intrinsic))
+        preVisitFlags.Remove(ConvertImageAccess | ConvertTextureBracketOp);
+
+    /* Convert mul intrinsic calls */
+    if (ast->intrinsic == Intrinsic::Mul && ast->arguments.size() == 2)
+    {
+        /* Convert "mul" intrinsic to "dot" intrinsic for vector-vector multiplication */
+        const auto& typeDenArg0 = ast->arguments[0]->GetTypeDenoter()->GetAliased();
+        const auto& typeDenArg1 = ast->arguments[1]->GetTypeDenoter()->GetAliased();
+
+        if (typeDenArg0.IsVector() && typeDenArg1.IsVector())
+            ast->intrinsic = Intrinsic::Dot;
+    }
+
+    ConvertExpr(ast->prefixExpr, AllPreVisit);
+    ConvertExprList(ast->arguments, preVisitFlags);
+    {
+        VISIT_DEFAULT(CallExpr);
+    }
+    ConvertExprList(ast->arguments, AllPostVisit);
+    ConvertExpr(ast->prefixExpr, AllPostVisit);
+
+    if (!IsInterlockedIntristic(ast->intrinsic))
+    {
+        ast->ForEachArgumentWithParameterType(
+            [this](ExprPtr& funcArg, const TypeDenoter& paramTypeDen)
+            {
+                ConvertExprTargetType(funcArg, paramTypeDen);
+            }
+        );
+    }
+}
+
+IMPLEMENT_VISIT_PROC(BracketExpr)
+{
+    ConvertExpr(ast->expr, AllPreVisit);
+    {
+        VISIT_DEFAULT(BracketExpr);
+    }
+    ConvertExpr(ast->expr, AllPostVisit);
+}
+
+IMPLEMENT_VISIT_PROC(CastExpr)
+{
+    ConvertExpr(ast->expr, AllPreVisit);
+    {
+        VISIT_DEFAULT(CastExpr);
+    }
+    ConvertExpr(ast->expr, AllPostVisit);
+}
+
+IMPLEMENT_VISIT_PROC(ObjectExpr)
+{
+    ConvertExpr(ast->prefixExpr, AllPreVisit);
+    {
+        VISIT_DEFAULT(ObjectExpr);
+    }
+    ConvertExpr(ast->prefixExpr, AllPostVisit);
+}
+
+IMPLEMENT_VISIT_PROC(AssignExpr)
+{
+    ConvertExpr(ast->lvalueExpr, AllPreVisit);
+    ConvertExpr(ast->rvalueExpr, AllPreVisit);
+    {
+        VISIT_DEFAULT(AssignExpr);
+    }
+    ConvertExpr(ast->lvalueExpr, AllPostVisit);
+    ConvertExpr(ast->rvalueExpr, AllPostVisit);
+
+    ConvertExprTargetType(ast->rvalueExpr, ast->lvalueExpr->GetTypeDenoter()->GetAliased());
+}
+
+IMPLEMENT_VISIT_PROC(ArrayExpr)
+{
+    for (auto& expr : ast->arrayIndices)
+        ConvertExpr(expr, AllPreVisit);
+    
+    VISIT_DEFAULT(ArrayExpr);
+    
+    for (auto& expr : ast->arrayIndices)
+    {
+        ConvertExpr(expr, AllPostVisit);
+        
+        /* Convert array index to integral type of same vector dimension */
+        const auto& typeDen = expr->GetTypeDenoter()->GetAliased();
+        if (auto baseTypeDen = typeDen.As<BaseTypeDenoter>())
+        {
+            /* Convert either to 'uint' on default, or 'int' if the vector base type is 'int' */
+            auto baseDataType = BaseDataType(baseTypeDen->dataType);
+            if (baseDataType != DataType::Int)
+                baseDataType = DataType::UInt;
+
+            const auto intVecType = VectorDataType(baseDataType, VectorTypeDim(baseTypeDen->dataType));
+            ConvertExprTargetType(expr, BaseTypeDenoter(intVecType));
+        }
+    }
+}
+
+#undef IMPLEMENT_VISIT_PROC
+
+/* ----- Conversion ----- */
+
+static TypeDenoterPtr MakeBufferAccessCallTypeDenoter(const DataType genericDataType)
 {
     auto typeDenoter = std::make_shared<BaseTypeDenoter>();
     
@@ -234,13 +486,14 @@ TypeDenoterPtr ExprConverter::MakeBufferAccessCallTypeDenoter(const DataType gen
     return typeDenoter;
 }
 
-/* ----- Conversion ----- */
-
 void ExprConverter::ConvertExpr(ExprPtr& expr, const Flags& flags)
 {
     if (expr)
     {
         const auto enabled = Flags(flags & conversionFlags_);
+        
+        if (enabled(ConvertTextureIntrinsicVec4))
+            ConvertExprTextureIntrinsicVec4(expr);
 
         if (enabled(ConvertLog10))
             ConvertExprIntrinsicCallLog10(expr);
@@ -257,8 +510,17 @@ void ExprConverter::ConvertExpr(ExprPtr& expr, const Flags& flags)
         if (enabled(ConvertVectorSubscripts))
             ConvertExprVectorSubscript(expr);
 
+        if (enabled(ConvertMatrixSubscripts))
+            ConvertExprMatrixSubscript(expr);
+
         if (enabled(ConvertUnaryExpr))
             ConvertExprIntoBracket(expr);
+        
+        if (enabled(ConvertTextureBracketOp))
+            ConvertExprTextureBracketOp(expr);
+
+        if (enabled(ConvertCompatibleStructs))
+            ConvertExprCompatibleStruct(expr);
     }
 }
 
@@ -287,6 +549,45 @@ void ExprConverter::ConvertExprVectorSubscriptObject(ExprPtr& expr, ObjectExpr* 
 
             /* Convert to cast expression */
             expr = ASTFactory::MakeCastExpr(vectorTypeDen, objectExpr->prefixExpr);
+        }
+    }
+}
+
+void ExprConverter::ConvertExprMatrixSubscript(ExprPtr& expr)
+{
+    if (auto objectExpr = expr->As<ObjectExpr>())
+        ConvertExprMatrixSubscriptObject(expr, objectExpr);
+}
+
+void ExprConverter::ConvertExprMatrixSubscriptObject(ExprPtr& expr, ObjectExpr* objectExpr)
+{
+    if (!objectExpr->symbolRef && objectExpr->prefixExpr)
+    {
+        /* Get type denoter of prefix expression */
+        const auto& prefixTypeDen = objectExpr->prefixExpr->GetTypeDenoter()->GetAliased();
+        if (prefixTypeDen.IsMatrix())
+        {
+            auto prefixBaseTypeDen = prefixTypeDen.As<BaseTypeDenoter>();
+
+            /* Get matrix subscript usage */
+            const MatrixSubscriptUsage subscriptUsage(prefixBaseTypeDen->dataType, objectExpr->ident);
+
+            if (IsScalarType(subscriptUsage.dataTypeOut) && !subscriptUsage.indices.empty())
+            {
+                /* Convert matrix subscript into array access */
+                const auto subscriptIndex = subscriptUsage.indices.front();
+                expr = ASTFactory::MakeArrayExpr(objectExpr->prefixExpr, { subscriptIndex.first, subscriptIndex.second });
+            }
+            else
+            {
+                /* Convert matrix subscript into function call to wrapper function */
+                const auto wrapperIdent = ExprConverter::GetMatrixSubscriptWrapperIdent(nameMangling_, subscriptUsage); 
+                expr = ASTFactory::MakeWrapperCallExpr(
+                    wrapperIdent,
+                    std::make_shared<BaseTypeDenoter>(subscriptUsage.dataTypeOut),
+                    { objectExpr->prefixExpr }
+                );
+            }
         }
     }
 }
@@ -398,7 +699,7 @@ void ExprConverter::ConvertExprImageAccessArray(ExprPtr& expr, ArrayExpr* arrayE
         {
             /* Is the buffer declaration a read/write texture? */
             const auto bufferType = bufferDecl->GetBufferType();
-            if (IsRWTextureBufferType(bufferType) && numDims < arrayExpr->NumIndices())
+            if (IsRWImageBufferType(bufferType) && numDims < arrayExpr->NumIndices())
             {
                 /* Get buffer type denoter from array indices of array access plus identifier */
                 //TODO: not sure if the buffer type must be derived with 'GetSub(arrayExpr)' again here???
@@ -417,7 +718,7 @@ void ExprConverter::ConvertExprImageAccessArray(ExprPtr& expr, ArrayExpr* arrayE
                     if (numDims > 0)
                     {
                         std::vector<ExprPtr> arrayIndices;
-                        for (size_t i = 0; i < numDims; i++)
+                        for (std::size_t i = 0; i < numDims; ++i)
                             arrayIndices.push_back(arrayExpr->arrayIndices[i]);
 
                         arg0Expr = ASTFactory::MakeArrayExpr(arrayExpr->prefixExpr, std::move(arrayIndices));
@@ -430,7 +731,7 @@ void ExprConverter::ConvertExprImageAccessArray(ExprPtr& expr, ArrayExpr* arrayE
 
                     /* Cast to valid dimension */
                     auto textureDim = GetTextureDimFromExpr(arg0Expr.get(), expr.get());
-                    ConvertExprIfCastRequired(arg1Expr, VectorDataType(DataType::Int, textureDim), true);
+                    ExprConverter::ConvertExprIfCastRequired(arg1Expr, VectorDataType(DataType::Int, textureDim), true);
 
                     ExprPtr exprOut;
 
@@ -460,11 +761,11 @@ void ExprConverter::ConvertExprImageAccessArray(ExprPtr& expr, ArrayExpr* arrayE
 
                         /* Cast to valid 4D vector type */
                         if (IsIntType(genericBaseTypeDen->dataType))
-                            ConvertExprIfCastRequired(arg2Expr, DataType::Int4, true);
+                            ExprConverter::ConvertExprIfCastRequired(arg2Expr, DataType::Int4, true);
                         else if (IsUIntType(genericBaseTypeDen->dataType))
-                            ConvertExprIfCastRequired(arg2Expr, DataType::UInt4, true);
+                            ExprConverter::ConvertExprIfCastRequired(arg2Expr, DataType::UInt4, true);
                         else
-                            ConvertExprIfCastRequired(arg2Expr, DataType::Float4, true);
+                            ExprConverter::ConvertExprIfCastRequired(arg2Expr, DataType::Float4, true);
 
                         /* Convert expression to intrinsic call */
                         exprOut = ASTFactory::MakeIntrinsicCallExpr(
@@ -549,7 +850,7 @@ void ExprConverter::ConvertExprSamplerBufferAccessArray(ExprPtr& expr, ArrayExpr
                     if (numDims > 0)
                     {
                         std::vector<ExprPtr> arrayIndices;
-                        for (std::size_t i = 0; i < numDims; i++)
+                        for (std::size_t i = 0; i < numDims; ++i)
                             arrayIndices.push_back(arrayExpr->arrayIndices[i]);
 
                         callExpr->prefixExpr = ASTFactory::MakeArrayExpr(arrayExpr->prefixExpr, std::move(arrayIndices));
@@ -564,6 +865,7 @@ void ExprConverter::ConvertExprSamplerBufferAccessArray(ExprPtr& expr, ArrayExpr
     }
 }
 
+// Converts "log10" intrinsics (which are not supported in GLSL) to "log(x) / log(10)"
 void ExprConverter::ConvertExprIntrinsicCallLog10(ExprPtr& expr)
 {
     /* Is this a call expression to the "log10" intrinisc? */
@@ -599,7 +901,7 @@ void ExprConverter::ConvertExprTargetType(ExprPtr& expr, const TypeDenoter& targ
     if (expr)
     {
         if (conversionFlags_(ConvertImplicitCasts))
-            ConvertExprIfCastRequired(expr, targetTypeDen, matchTypeSize);
+            ExprConverter::ConvertExprIfCastRequired(expr, targetTypeDen, matchTypeSize);
 
         if (auto initExpr = expr->As<InitializerExpr>())
         {
@@ -609,15 +911,13 @@ void ExprConverter::ConvertExprTargetType(ExprPtr& expr, const TypeDenoter& targ
                 const auto& subTypeDen = arrayTargetTypeDen->subTypeDenoter->GetAliased();
                 for (auto& expr : initExpr->exprs)
                     ConvertExprTargetType(expr, subTypeDen);
-            }
+            } 
+
+            /* If enabled, convert initializer to a type constructor */
+            if (conversionFlags_(ConvertInitializerToCtor))
+                ConvertExprTargetTypeInitializer(expr, initExpr, targetTypeDen);
             else
-            {
-                /* If enabled, convert initializer to a type constructor */
-                if (conversionFlags_(ConvertInitializerToCtor))
-                    ConvertExprTargetTypeInitializer(expr, initExpr, targetTypeDen);
-                else
-                    ConvertExprFormatInitializer(expr, initExpr, targetTypeDen);
-            }
+                ConvertExprFormatInitializer(expr, initExpr, targetTypeDen);
         }
     }
 }
@@ -669,281 +969,151 @@ void ExprConverter::ConvertExprFormatInitializer(ExprPtr& expr, InitializerExpr*
     }
 }
 
-/* ------- Visit functions ------- */
-
-#define IMPLEMENT_VISIT_PROC(AST_NAME) \
-    void ExprConverter::Visit##AST_NAME(AST_NAME* ast, void* args)
-
-/* --- Declarations --- */
-
-IMPLEMENT_VISIT_PROC(VarDecl)
+void ExprConverter::ConvertExprTextureBracketOp(ExprPtr& expr)
 {
-    if (ast->initializer)
+    if (!expr->flags(Expr::wasConverted) && expr->Type() == AST::Types::ArrayExpr)
     {
-        ConvertExpr(ast->initializer, AllPreVisit);
+        if (auto arrayExpr = std::static_pointer_cast<ArrayExpr>(expr))
         {
-            VISIT_DEFAULT(VarDecl);
-        }
-        ConvertExpr(ast->initializer, AllPostVisit);
-
-        ConvertExprTargetType(ast->initializer, ast->GetTypeDenoter()->GetAliased());
-    }
-    else
-        VISIT_DEFAULT(VarDecl);
-}
-
-/* --- Declaration statements --- */
-
-IMPLEMENT_VISIT_PROC(FunctionDecl)
-{
-    PushFunctionDecl(ast);
-    {
-        VISIT_DEFAULT(FunctionDecl);
-    }
-    PopFunctionDecl();
-}
-
-/* --- Statements --- */
-
-IMPLEMENT_VISIT_PROC(ForLoopStmnt)
-{
-    ConvertExpr(ast->condition, AllPreVisit);
-    ConvertExpr(ast->iteration, AllPreVisit);
-    {
-        VISIT_DEFAULT(ForLoopStmnt);
-    }
-    ConvertExpr(ast->condition, AllPostVisit);
-    ConvertExpr(ast->iteration, AllPostVisit);
-}
-
-IMPLEMENT_VISIT_PROC(WhileLoopStmnt)
-{
-    ConvertExpr(ast->condition, AllPreVisit);
-    {
-        VISIT_DEFAULT(WhileLoopStmnt);
-    }
-    ConvertExpr(ast->condition, AllPostVisit);
-}
-
-IMPLEMENT_VISIT_PROC(DoWhileLoopStmnt)
-{
-    ConvertExpr(ast->condition, AllPreVisit);
-    {
-        VISIT_DEFAULT(DoWhileLoopStmnt);
-    }
-    ConvertExpr(ast->condition, AllPostVisit);
-}
-
-IMPLEMENT_VISIT_PROC(IfStmnt)
-{
-    ConvertExpr(ast->condition, AllPreVisit);
-    {
-        VISIT_DEFAULT(IfStmnt);
-    }
-    ConvertExpr(ast->condition, AllPostVisit);
-}
-
-IMPLEMENT_VISIT_PROC(SwitchStmnt)
-{
-    ConvertExpr(ast->selector, AllPreVisit);
-    {
-        VISIT_DEFAULT(SwitchStmnt);
-    }
-    ConvertExpr(ast->selector, AllPostVisit);
-}
-
-IMPLEMENT_VISIT_PROC(ExprStmnt)
-{
-    ConvertExpr(ast->expr, AllPreVisit);
-    {
-        VISIT_DEFAULT(ExprStmnt);
-    }
-    ConvertExpr(ast->expr, AllPostVisit);
-}
-
-IMPLEMENT_VISIT_PROC(ReturnStmnt)
-{
-    if (ast->expr)
-    {
-        ConvertExpr(ast->expr, AllPreVisit);
-        {
-            VISIT_DEFAULT(ReturnStmnt);
-        }
-        ConvertExpr(ast->expr, AllPostVisit);
-
-        if (auto funcDecl = ActiveFunctionDecl())
-            ConvertExprTargetType(ast->expr, funcDecl->returnType->GetTypeDenoter()->GetAliased());
-    }
-}
-
-/* --- Expressions --- */
-
-IMPLEMENT_VISIT_PROC(TernaryExpr)
-{
-    ConvertExpr(ast->condExpr, AllPreVisit);
-    ConvertExpr(ast->thenExpr, AllPreVisit);
-    ConvertExpr(ast->elseExpr, AllPreVisit);
-    {
-        VISIT_DEFAULT(TernaryExpr);
-    }
-    ConvertExpr(ast->condExpr, AllPostVisit);
-    ConvertExpr(ast->thenExpr, AllPostVisit);
-    ConvertExpr(ast->elseExpr, AllPostVisit);
-}
-
-// Convert right-hand-side expression (if cast required)
-IMPLEMENT_VISIT_PROC(BinaryExpr)
-{
-    ConvertExpr(ast->lhsExpr, AllPreVisit);
-    ConvertExpr(ast->rhsExpr, AllPreVisit);
-    {
-        VISIT_DEFAULT(BinaryExpr);
-    }
-    ConvertExpr(ast->lhsExpr, AllPostVisit);
-    ConvertExpr(ast->rhsExpr, AllPostVisit);
-
-    /* Convert sub expressions if cast required, then reset type denoter */
-    auto lhsTypeDen = ast->lhsExpr->GetTypeDenoter()->GetSub();
-    auto rhsTypeDen = ast->rhsExpr->GetTypeDenoter()->GetSub();
-
-    auto commonTypeDen = TypeDenoter::FindCommonTypeDenoter(lhsTypeDen, rhsTypeDen);
-
-    /* Ensure type sizes are cast only if necessary */
-    bool matchTypeSize = true;
-    if (ast->op == BinaryOp::Div)
-    {
-        if (rhsTypeDen->IsScalar())
-            matchTypeSize = false;
-    }
-    else if (ast->op == BinaryOp::Mul)
-    {
-        if (lhsTypeDen->IsScalar() || rhsTypeDen->IsScalar())
-            matchTypeSize = false;
-    }
-
-    ConvertExprTargetType(ast->lhsExpr, *commonTypeDen, matchTypeSize);
-    ConvertExprTargetType(ast->rhsExpr, *commonTypeDen, matchTypeSize);
-
-    ast->ResetTypeDenoter();
-}
-
-// Wrap unary expression if the next sub expression is again an unary expression
-IMPLEMENT_VISIT_PROC(UnaryExpr)
-{
-    ConvertExpr(ast->expr, AllPreVisit);
-    {
-        VISIT_DEFAULT(UnaryExpr);
-    }
-    ConvertExpr(ast->expr, AllPostVisit);
-
-    if (ast->expr->Type() == AST::Types::UnaryExpr)
-        ConvertExpr(ast->expr, ConvertUnaryExpr);
-}
-
-IMPLEMENT_VISIT_PROC(CallExpr)
-{
-    /* Interlocked (atomic) intristics require actual buffer, and not their contents */
-    Flags preVisitFlags = AllPreVisit;
-    if (IsInterlockedIntristic(ast->intrinsic))
-        preVisitFlags.Remove(ConvertImageAccess);
-
-    /* Convert mul intrinsic calls */
-    if (ast->intrinsic == Intrinsic::Mul && ast->arguments.size() == 2)
-    {
-        /* Convert "mul" intrinsic to "dot" intrinsic for vector-vector multiplication */
-        const auto& typeDenArg0 = ast->arguments[0]->GetTypeDenoter()->GetAliased();
-        const auto& typeDenArg1 = ast->arguments[1]->GetTypeDenoter()->GetAliased();
-
-        if (typeDenArg0.IsVector() && typeDenArg1.IsVector())
-            ast->intrinsic = Intrinsic::Dot;
-    }
-
-    ConvertExpr(ast->prefixExpr, AllPreVisit);
-    ConvertExprList(ast->arguments, preVisitFlags);
-    {
-        VISIT_DEFAULT(CallExpr);
-    }
-    ConvertExprList(ast->arguments, AllPostVisit);
-    ConvertExpr(ast->prefixExpr, AllPostVisit);
-
-    if (!IsInterlockedIntristic(ast->intrinsic))
-    {
-        ast->ForEachArgumentWithParameterType(
-            [this](ExprPtr& funcArg, const TypeDenoter& paramTypeDen)
+            /*
+            Split array expression if needed, e.g. when 'tex[1][idx][0]' is equivalent to 'tex[1][idx].r',
+            i.e. the Texture Operator[] is not the last array index.
+            */
+            for (std::size_t i = 0; i + 1u < arrayExpr->NumIndices(); ++i)
             {
-                ConvertExprTargetType(funcArg, paramTypeDen);
+                auto typeDen = arrayExpr->prefixExpr->GetTypeDenoter()->GetSubArray(arrayExpr->NumIndices() - i - 1);
+                if (auto bufferTypeDen = typeDen->As<BufferTypeDenoter>())
+                {
+                    if (!IsTextureBufferType(bufferTypeDen->bufferType))
+                    {
+                        /* Convert Texture Operator[] only for texture buffer types */
+                        return;
+                    }
+
+                    if (i > 0)
+                    {
+                        arrayExpr = ASTFactory::MakeArrayExprSplit(arrayExpr, arrayExpr->NumIndices() - i);
+                        ConvertExprTextureBracketOp(arrayExpr->prefixExpr);
+                        expr = arrayExpr;
+                    }
+                    break;
+                }
             }
-        );
-    }
-}
 
-IMPLEMENT_VISIT_PROC(BracketExpr)
-{
-    ConvertExpr(ast->expr, AllPreVisit);
-    {
-        VISIT_DEFAULT(BracketExpr);
-    }
-    ConvertExpr(ast->expr, AllPostVisit);
-}
+            /* Has the prefix expression a Texture type denoter? */
+            auto typeDen = arrayExpr->prefixExpr->GetTypeDenoter()->GetSubArray(arrayExpr->NumIndices() - 1);
+            if (auto bufferTypeDen = typeDen->As<BufferTypeDenoter>())
+            {
+                if (!IsTextureBufferType(bufferTypeDen->bufferType))
+                {
+                    /* Convert Texture Operator[] only for texture buffer types */
+                    return;
+                }
 
-IMPLEMENT_VISIT_PROC(CastExpr)
-{
-    ConvertExpr(ast->expr, AllPreVisit);
-    {
-        VISIT_DEFAULT(CastExpr);
-    }
-    ConvertExpr(ast->expr, AllPostVisit);
-}
+                expr->flags << Expr::wasConverted;
 
-IMPLEMENT_VISIT_PROC(ObjectExpr)
-{
-    ConvertExpr(ast->prefixExpr, AllPreVisit);
-    {
-        VISIT_DEFAULT(ObjectExpr);
-    }
-    ConvertExpr(ast->prefixExpr, AllPostVisit);
-}
+                /* Make "Load" intrinsic call */
+                auto callExpr = ASTFactory::MakeIntrinsicCallExpr(
+                    Intrinsic::Texture_Load_1, "Load", nullptr,
+                    { arrayExpr->arrayIndices.back() }
+                );
 
-IMPLEMENT_VISIT_PROC(AssignExpr)
-{
-    ConvertExpr(ast->lvalueExpr, AllPreVisit);
-    ConvertExpr(ast->rvalueExpr, AllPreVisit);
-    {
-        VISIT_DEFAULT(AssignExpr);
-    }
-    ConvertExpr(ast->lvalueExpr, AllPostVisit);
-    ConvertExpr(ast->rvalueExpr, AllPostVisit);
+                /* Use former expression as prefix for intrinsic call */
+                ExprPtr prefixExpr;
 
-    ConvertExprTargetType(ast->rvalueExpr, ast->lvalueExpr->GetTypeDenoter()->GetAliased());
-}
+                arrayExpr->arrayIndices.pop_back();
 
-IMPLEMENT_VISIT_PROC(ArrayExpr)
-{
-    for (auto& expr : ast->arrayIndices)
-        ConvertExpr(expr, AllPreVisit);
-    
-    VISIT_DEFAULT(ArrayExpr);
-    
-    for (auto& expr : ast->arrayIndices)
-    {
-        ConvertExpr(expr, AllPostVisit);
-        
-        /* Convert array index to integral type of same vector dimension */
-        const auto& typeDen = expr->GetTypeDenoter()->GetAliased();
-        if (auto baseTypeDen = typeDen.As<BaseTypeDenoter>())
-        {
-            /* Convert either to 'uint' on default, or 'int' if the vector base type is 'int' */
-            auto baseDataType = BaseDataType(baseTypeDen->dataType);
-            if (baseDataType != DataType::Int)
-                baseDataType = DataType::UInt;
+                if (arrayExpr->arrayIndices.empty())
+                    callExpr->prefixExpr = arrayExpr->prefixExpr;
+                else
+                    callExpr->prefixExpr = expr;
 
-            const auto intVecType = VectorDataType(baseDataType, VectorTypeDim(baseTypeDen->dataType));
-            ConvertExprTargetType(expr, BaseTypeDenoter(intVecType));
+                /* Reset type denoter of prefix expression (array index list has changed) */
+                callExpr->prefixExpr->ResetTypeDenoter();
+
+                /* Replace former expression with new intrinsic call */
+                expr = callExpr;
+            }
         }
     }
 }
 
-#undef IMPLEMENT_VISIT_PROC
+/*
+Converts texture intrinsic calls that have a generic type lower than 4D-vectors.
+E.g. "Texture2D<float2> tex; tex.Sample(...)" -> "tex.Sample(...).rg"
+*/
+void ExprConverter::ConvertExprTextureIntrinsicVec4(ExprPtr& expr)
+{
+    /* Is this a call expression? */
+    if (auto callExpr = expr->As<CallExpr>())
+    {
+        /* Is this an intrinsic call? */
+        const auto intrinsic = callExpr->intrinsic;
+        if (intrinsic != Intrinsic::Undefined)
+        {
+            /* Is this a texture intrinsic? */
+            bool isSampleIntrinsic = IsTextureSampleIntrinsic(intrinsic);
+            if (IsTextureLoadIntrinsic(intrinsic) || isSampleIntrinsic || IsTextureGatherIntrisic(intrinsic))
+            {
+                /* Skip sample compare intrinsics as they return a scalar */
+                if (!isSampleIntrinsic || !IsTextureCompareIntrinsic(intrinsic))
+                {
+                    /* Is the return type a base type denoter? */
+                    const auto& typeDen = callExpr->GetTypeDenoter()->GetAliased();
+                    if (auto baseTypeDen = typeDen.As<BaseTypeDenoter>())
+                    {
+                        /* Has the return type less than 4-dimensions? */
+                        const auto vecTypeDim = VectorTypeDim(baseTypeDen->dataType);
+                        if (vecTypeDim >= 1 && vecTypeDim <= 3)
+                        {
+                            /* Append vector subscript to intrinsic call (use "rgba" instead of "xyzw" for color based purposes) */
+                            const std::string vectorSubscript = "rgb";
+
+                            expr = ASTFactory::MakeObjectExpr(
+                                expr,
+                                vectorSubscript.substr(0, static_cast<std::size_t>(vecTypeDim))
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+void ExprConverter::ConvertExprCompatibleStruct(ExprPtr& expr)
+{
+    /* Is this an object expression? */
+    if (auto objectExpr = expr->As<ObjectExpr>())
+    {
+        if (objectExpr->prefixExpr && objectExpr->symbolRef)
+        {
+            /* Does the object expression refer to a variable? */
+            if (auto varDecl = objectExpr->symbolRef->As<VarDecl>())
+            {
+                /* Has the prefix expression a struct type denoter? */
+                const auto& prefixTypeDen = objectExpr->prefixExpr->GetTypeDenoter()->GetAliased();
+                if (auto prefixStructTypeDen = prefixTypeDen.As<StructTypeDenoter>())
+                {
+                    if (auto structDecl = prefixStructTypeDen->structDeclRef)
+                    {
+                        /* Has the struct a compatible struct? */
+                        if (auto compatStruct = structDecl->compatibleStructRef)
+                        {
+                            /* Map original variable to compatible variable by index */
+                            auto idx = structDecl->MemberVarToIndex(varDecl);
+                            if (auto compatVarDecl = compatStruct->IndexToMemberVar(idx))
+                            {
+                                /* Replace identifier by respective member of the type-compatible struct */
+                                objectExpr->ReplaceSymbol(compatVarDecl);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 
 } // /namespace Xsc

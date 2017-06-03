@@ -17,7 +17,6 @@
 #include <ostream>
 
 
-
 namespace Xsc
 {
 
@@ -25,6 +24,8 @@ namespace Xsc
 namespace Reflection
 {
 
+
+/* ===== Public enumerations ===== */
 
 //! Sampler filter enumeration (D3D11_FILTER).
 enum class Filter
@@ -89,6 +90,9 @@ enum class ComparisonFunc
     GreaterEqual    = 7,
     Always          = 8,
 };
+
+
+/* ===== Public structures ===== */
 
 /**
 \brief Static sampler state descriptor structure (D3D11_SAMPLER_DESC).
@@ -464,6 +468,8 @@ struct ReflectionData
 
 } // /namespace Reflection
 
+
+/* ===== Public functions ===== */
 
 //! Returns the string representation of the specified 'SamplerState::Filter' type.
 XSC_EXPORT std::string ToString(const Reflection::Filter t);

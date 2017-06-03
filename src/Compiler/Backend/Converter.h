@@ -9,7 +9,7 @@
 #define XSC_CONVERTER_H
 
 
-#include "Visitor.h"
+#include "VisitorTracker.h"
 #include "TypeDenoter.h"
 #include "SymbolTable.h"
 #include "Identifier.h"
@@ -26,7 +26,7 @@ GLSL AST converter.
 This class modifies the AST after context analysis to be conform with GLSL,
 e.g. remove arguments from intrinsic calls, that are not allowed in GLSL, such as sampler state objects.
 */
-class Converter : public Visitor
+class Converter : public VisitorTracker
 {
     
     public:
@@ -57,7 +57,10 @@ class Converter : public Visitor
         // Registers the AST node in the current scope with the specified identifier.
         void Register(const std::string& ident);
 
-        // Tries to fetch an AST node with the specified identifier from the symbol table and reports an error on failure.
+        // Returns the symbol with the specified identifer which is in the deepest scope, or null if there is no such symbol.
+        bool Fetch(const std::string& ident) const;
+
+        // Returns the symbol with the specified identifer which is in the current scope, or null if there is no such symbol.
         bool FetchFromCurrentScope(const std::string& ident) const;
 
         /* ----- Self parameter ----- */
@@ -93,10 +96,13 @@ class Converter : public Visitor
         void VisitScopedStmntList(std::vector<StmntPtr>& stmntList, void* args = nullptr);
 
         // Inserts the specified statement before the current statement.
-        void InsertStmntBefore(const StmntPtr& stmnt);
+        void InsertStmntBefore(const StmntPtr& stmnt, bool globalScope = false);
 
         // Inserts the specified statement after the current statement.
-        void InsertStmntAfter(const StmntPtr& stmnt);
+        void InsertStmntAfter(const StmntPtr& stmnt, bool globalScope = false);
+
+        // Moves all structure declaration within the specified statement list into the respective upper scope.
+        void MoveNestedStructDecls(std::vector<StmntPtr>& localStmnts, bool globalScope = false);
 
         /* ----- Misc ----- */
 
@@ -165,17 +171,18 @@ class Converter : public Visitor
         // Symbol table to determine which variables must be renamed (scope rules are different between HLSL and GLSL).
         SymbolTable<bool>               symTable_;
 
-        Program*                        program_                = nullptr;
+        Program*                        program_                    = nullptr;
         NameMangling                    nameMangling_;
 
         // Stack with information of the current 'self' parameter of a member function.
         std::vector<VarDecl*>           selfParamStack_;
 
         std::stack<StmntScopeHandler>   stmntScopeHandlerStack_;
+        StmntScopeHandler*              stmntScopeHandlerGlobalRef_ = nullptr;
 
-        unsigned int                    anonymCounter_          = 0;
-        unsigned int                    obfuscationCounter_     = 0;
-        unsigned int                    tempVarCounter_         = 0;
+        unsigned int                    anonymCounter_              = 0;
+        unsigned int                    obfuscationCounter_         = 0;
+        unsigned int                    tempVarCounter_             = 0;
 
 };
 
