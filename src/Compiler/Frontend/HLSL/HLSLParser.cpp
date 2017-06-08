@@ -1875,6 +1875,10 @@ BufferTypeDenoterPtr HLSLParser::ParseBufferTypeDenoter()
         {
             AcceptIt();
 
+            /* Parse optional 'unorm' or 'snorm' modifiers */
+            if (IsModifier())
+                AcceptIt();
+
             /* Parse generic type denoter ('<' TYPE '>') */
             typeDenoter->genericTypeDenoter = ParseTypeDenoter(false);
 
