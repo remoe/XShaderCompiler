@@ -112,6 +112,10 @@ struct SamplerState
     float               borderColor[4]  = { 0.0f, 0.0f, 0.0f, 0.0f };
     float               minLOD          = -std::numeric_limits<float>::max();
     float               maxLOD          = std::numeric_limits<float>::max();
+
+    // BEGIN BANSHEE CHANGES
+    bool                isNonDefault    = false;
+    //
 };
 
 //! Binding slot of textures, constant buffers, and fragment targets.

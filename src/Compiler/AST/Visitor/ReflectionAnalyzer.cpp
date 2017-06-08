@@ -105,7 +105,13 @@ IMPLEMENT_VISIT_PROC(SamplerDecl)
     Reflection::SamplerState samplerState;
     {
         for (auto& value : ast->samplerValues)
+        {
             ReflectSamplerValue(value.get(), samplerState);
+
+            // BEGIN BANSHEE CHANGES
+            samplerState.isNonDefault = true;
+            // END BANSHEE CHANGES
+        }
     }
     data_->samplerStates[ast->ident] = samplerState;
 
