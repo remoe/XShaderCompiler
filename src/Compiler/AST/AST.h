@@ -647,6 +647,10 @@ struct SamplerDecl : public Decl
     std::vector<SamplerValuePtr>    samplerValues;              // State values for a sampler decl-ident.
 
     SamplerDeclStmnt*               declStmntRef    = nullptr;  // Reference to its declaration statmenet (parent node).
+
+    // BEGIN BANSHEE CHANGES
+    std::string                     alias;
+    // END BANSHEE CHANGES
 };
 
 // StructDecl object.

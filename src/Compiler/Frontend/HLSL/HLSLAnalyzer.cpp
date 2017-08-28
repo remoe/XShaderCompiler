@@ -353,6 +353,16 @@ IMPLEMENT_VISIT_PROC(FunctionDecl)
     GetReportHandler().PopContextDesc();
 }
 
+// BEGIN BANSHEE CHANGES
+IMPLEMENT_VISIT_PROC(SamplerDeclStmnt)
+{
+    Visit(ast->samplerDecls);
+
+    AnalyzeExtAttributes(ast->attribs, ast->samplerDecls);
+}
+
+// END BANSHEE CHANGES
+
 IMPLEMENT_VISIT_PROC(BufferDeclStmnt)
 {
     /* Analyze generic type */
@@ -2662,6 +2672,36 @@ void HLSLAnalyzer::AnalyzeAttributeModifier(Attribute* attrib, const TypeDenoter
                 baseTypeDen->extModifiers |= ExtModifiers::Color;
             else if (attrib->attributeType == AttributeType::Internal)
                 baseTypeDen->extModifiers |= ExtModifiers::Internal;
+        }
+    }
+}
+
+void HLSLAnalyzer::AnalyzeExtAttributes(std::vector<AttributePtr>& attribs, const std::vector<SamplerDeclPtr>& samplerDecls)
+{
+    for (const auto& attrib : attribs)
+    {
+        switch (attrib->attributeType)
+        {
+            case AttributeType::Alias:
+            {
+                if (AnalyzeNumArgsAttribute(attrib.get(), 1, true))
+                {
+                    auto expr = attrib->arguments[0].get();
+                    if (auto objectExpr = expr->As<ObjectExpr>())
+                    {
+                        for (auto& samplerDecl : samplerDecls)
+                            samplerDecl->alias = objectExpr->ident;
+                    }
+                    else
+                        Error(R_ExpectedIdentArgInAttribute("layout"), expr);
+                }
+            }
+            break;
+            default:
+            {
+                /* Ignore other attributes here */
+            }
+            break;
         }
     }
 }

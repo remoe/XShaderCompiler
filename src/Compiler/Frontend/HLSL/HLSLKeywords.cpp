@@ -926,6 +926,7 @@ static Dictionary<AttributeType> GenerateAttributeTypeDict()
         // BEGIN BANSHEE CHANGES
         { "color",                     T::Color },
         { "internal",                  T::Internal },
+        { "alias",                     T::Alias },
 
         // END BANSHEE CHANGES
         #endif

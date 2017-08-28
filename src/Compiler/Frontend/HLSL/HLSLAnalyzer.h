@@ -73,6 +73,9 @@ class HLSLAnalyzer : public Analyzer
         DECL_VISIT_PROC( AliasDecl         );
         DECL_VISIT_PROC( FunctionDecl      );
 
+        // BEGIN BANSHEE CHANGES
+        DECL_VISIT_PROC( SamplerDeclStmnt  );
+        // END BANSHEE CHANGES
         DECL_VISIT_PROC( BufferDeclStmnt   );
         DECL_VISIT_PROC( UniformBufferDecl );
         DECL_VISIT_PROC( VarDeclStmnt      );
@@ -216,6 +219,7 @@ class HLSLAnalyzer : public Analyzer
 
         // BEGIN BANSHEE CHANGES
         void AnalyzeAttributeModifier(Attribute* attrib, const TypeDenoterPtr& typeDen);
+        void AnalyzeExtAttributes(std::vector<AttributePtr>& attribs, const std::vector<SamplerDeclPtr>& samplerDecls);
         // END BANSHEE CHANGES
 
         #endif

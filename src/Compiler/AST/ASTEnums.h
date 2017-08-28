@@ -658,6 +658,7 @@ enum class AttributeType
     // BEGIN BANSHEE CHANGES
     Color,
     Internal,
+    Alias,
     // END BANSHEE CHANGES
 
     #endif
