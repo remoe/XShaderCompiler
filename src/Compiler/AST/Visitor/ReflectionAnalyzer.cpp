@@ -113,6 +113,8 @@ IMPLEMENT_VISIT_PROC(SamplerDecl)
             // END BANSHEE CHANGES
         }
     }
+
+    samplerState.alias = ast->alias;
     data_->samplerStates[ast->ident] = samplerState;
 
     // BEGIN BANSHEE CHANGES
@@ -123,14 +125,6 @@ IMPLEMENT_VISIT_PROC(SamplerDecl)
     uniform.baseType = 0;
 
     data_->uniforms.push_back(uniform);
-
-    if(!ast->alias.empty())
-    {
-        uniform.ident = ast->alias;
-
-        data_->uniforms.push_back(uniform);
-        data_->samplerStates[ast->alias] = samplerState;
-    }
 
     // END BANSHEE CHANGES
 }
