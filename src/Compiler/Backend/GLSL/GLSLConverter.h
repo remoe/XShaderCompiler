@@ -129,6 +129,10 @@ class GLSLConverter : public Converter
         //TODO: this should be replaced by the code-injection functionality.
         void ConvertEntryPointReturnStmntToCodeBlock(StmntPtr& stmnt);
 
+        // BEGIN BANSHEE CHANGES
+        void AddMissingInterpModifiers(const std::vector<VarDecl*>& varDecls);
+        // END BANSHEE CHANGES
+
         /* ----- Object expressions ----- */
 
         void ConvertObjectExpr(ObjectExpr* objectExpr);

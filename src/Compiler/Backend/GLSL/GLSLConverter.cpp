@@ -157,6 +157,14 @@ IMPLEMENT_VISIT_PROC(Program)
     RegisterGlobalDeclIdents(entryPoint->inputSemantics.varDeclRefsSV);
     RegisterGlobalDeclIdents(entryPoint->outputSemantics.varDeclRefsSV);
 
+    // BEGIN BANSHEE CHANGES
+    if(shaderTarget_ != ShaderTarget::VertexShader && shaderTarget_ != ShaderTarget::ComputeShader)
+        AddMissingInterpModifiers(entryPoint->inputSemantics.varDeclRefs);
+
+    if(shaderTarget_ != ShaderTarget::FragmentShader && shaderTarget_ != ShaderTarget::ComputeShader)
+        AddMissingInterpModifiers(entryPoint->outputSemantics.varDeclRefs);
+    // END BANSHEE CHANGES
+
     VisitScopedStmntList(ast->globalStmnts);
 }
 
@@ -1421,6 +1429,24 @@ void GLSLConverter::ConvertEntryPointReturnStmntToCodeBlock(StmntPtr& stmnt)
         }
     }
 }
+
+// BEGIN BANSHEE CHANGES
+void GLSLConverter::AddMissingInterpModifiers(const std::vector<VarDecl*>& varDecls)
+{
+    for(auto& var : varDecls)
+    {
+        TypeDenoterPtr typeDenoter = var->declStmntRef->typeSpecifier->typeDenoter;
+        if (auto baseTypeDen = typeDenoter->As<BaseTypeDenoter>())
+        {
+            if (IsIntegralType(baseTypeDen->dataType))
+            {
+                // GLSL requires 'flat' modifier for integer types
+                var->declStmntRef->typeSpecifier->interpModifiers.insert(InterpModifier::NoInterpolation);
+            }
+        }
+    }
+}
+// END BANSHEE CHANGES
 
 /* ----- Object expressions ----- */
 
