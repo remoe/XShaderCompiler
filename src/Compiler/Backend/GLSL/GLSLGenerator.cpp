@@ -3219,9 +3219,15 @@ void GLSLGenerator::WriteBufferDeclStorageBuffer(BufferDecl* bufferDecl)
         /* Write buffer array (of variable size) */
         WriteScopeOpen(false, true);
         {
+            // BEGIN BANSHEE CHANGES
+            // Banshee: Don't write the 'readonly' qualifier as it requires any function accepting this variable to have the same
+            // qualifier, meaning potentially multiple versions of the same function need to exist. In short it compilicates the
+            // design too much, and benefits might be non-existent.
+            
             /* Write optional memory type qualifier */
-            if (!IsRWBufferType(bufferDecl->GetBufferType()))
-                Write("readonly ");
+            //if (!IsRWBufferType(bufferDecl->GetBufferType()))
+            //    Write("readonly ");
+            // END BANSHEE CHANGES
 
             /* Write generic type denoterand identifier */
             auto genericTypeDen = bufferDecl->declStmntRef->typeDenoter->GetGenericTypeDenoter();
