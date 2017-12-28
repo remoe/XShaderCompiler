@@ -11,6 +11,10 @@
 #include "Helper.h"
 #include "ReportIdents.h"
 
+// BEGIN BANSHEE CHANGES
+#include <cstring>
+// END BANSHEE CHANGES
+
 
 namespace Xsc
 {
