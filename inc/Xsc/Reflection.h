@@ -116,7 +116,7 @@ struct SamplerState
     // BEGIN BANSHEE CHANGES
     bool                isNonDefault    = false;
     std::string         alias;
-    //
+    // END BANSHEE CHANGES
 };
 
 //! Binding slot of textures, constant buffers, and fragment targets.

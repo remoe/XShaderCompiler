@@ -35,25 +35,27 @@ XSC_EXPORT bool CompileShader(
         &timePoints
     );
 
-    if (reflectionData)
-    {
-        /* Sort reflection */
-        auto SortStats = [](std::vector<Reflection::BindingSlot>& objects)
-        {
-            std::sort(
-                objects.begin(), objects.end(),
-                [](const Reflection::BindingSlot& lhs, const Reflection::BindingSlot& rhs)
-                {
-                    return (lhs.location < rhs.location);
-                }
-            );
-        };
+    // BEGIN BANSHEE CHANGES
+    //if (reflectionData)
+    //{
+    //    /* Sort reflection */
+    //    auto SortStats = [](std::vector<Reflection::BindingSlot>& objects)
+    //    {
+    //        std::sort(
+    //            objects.begin(), objects.end(),
+    //            [](const Reflection::BindingSlot& lhs, const Reflection::BindingSlot& rhs)
+    //            {
+    //                return (lhs.location < rhs.location);
+    //            }
+    //        );
+    //    };
 
-        SortStats(reflectionData->textures);
-        SortStats(reflectionData->constantBuffers);
-        SortStats(reflectionData->inputAttributes);
-        SortStats(reflectionData->outputAttributes);
-    }
+    //    SortStats(reflectionData->textures);
+    //    SortStats(reflectionData->constantBuffers);
+    //    SortStats(reflectionData->inputAttributes);
+    //    SortStats(reflectionData->outputAttributes);
+    //}
+    // END BANSHEE CHANGES
 
     /* Show timings */
     if (outputDesc.options.showTimes && log)
