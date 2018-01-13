@@ -103,12 +103,12 @@ Thus, they can all be statically casted from and to the original D3D11 values.
 struct SamplerState
 {
     Filter              filter          = Filter::MinMagMipLinear;
-    TextureAddressMode  addressU        = TextureAddressMode::Clamp;
-    TextureAddressMode  addressV        = TextureAddressMode::Clamp;
-    TextureAddressMode  addressW        = TextureAddressMode::Clamp;
+    TextureAddressMode  addressU        = TextureAddressMode::Wrap;
+    TextureAddressMode  addressV        = TextureAddressMode::Wrap;
+    TextureAddressMode  addressW        = TextureAddressMode::Wrap;
     float               mipLODBias      = 0.0f;
     unsigned int        maxAnisotropy   = 1u;
-    ComparisonFunc      comparisonFunc  = ComparisonFunc::Never;
+    ComparisonFunc      comparisonFunc  = ComparisonFunc::Always;
     float               borderColor[4]  = { 0.0f, 0.0f, 0.0f, 0.0f };
     float               minLOD          = -std::numeric_limits<float>::max();
     float               maxLOD          = std::numeric_limits<float>::max();
