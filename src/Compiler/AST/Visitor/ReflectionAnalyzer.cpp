@@ -435,7 +435,7 @@ IMPLEMENT_VISIT_PROC(UniformBufferDecl)
             DataType baseType = DataType::Undefined;
 
             BaseTypeDenoter* baseTypeDenoter = nullptr;
-            if (stmt->typeSpecifier->structDecl)
+            if (stmt->typeSpecifier->typeDenoter->As<StructTypeDenoter>())
                 type = Reflection::UniformType::Struct;
             else
             {
