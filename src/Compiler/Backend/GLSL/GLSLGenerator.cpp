@@ -446,13 +446,16 @@ IMPLEMENT_VISIT_PROC(VarDecl)
 
     Visit(ast->arrayDims);
 
-    if (ast->initializer)
+    if (!InsideUniformBufferDecl())
     {
-        const auto& typeDen = ast->initializer->GetTypeDenoter()->GetAliased();
-        if (!typeDen.IsNull())
+        if (ast->initializer)
         {
-            Write(" = ");
-            Visit(ast->initializer);
+            const auto& typeDen = ast->initializer->GetTypeDenoter()->GetAliased();
+            if (!typeDen.IsNull())
+            {
+                Write(" = ");
+                Visit(ast->initializer);
+            }
         }
     }
 }
