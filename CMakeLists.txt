@@ -10,13 +10,13 @@ project(XShaderCompiler)
 set(BUILD_OUTPUT_PATH "${CMAKE_CURRENT_BINARY_DIR}/build")
 set(EXECUTABLE_OUTPUT_PATH ${BUILD_OUTPUT_PATH} CACHE PATH "Build directory" FORCE)
 set(LIBRARY_OUTPUT_PATH ${BUILD_OUTPUT_PATH} CACHE PATH "Build directory" FORCE)
-set(INSTALL_OUTPUT_PATH "${CMAKE_CURRENT_BINARY_DIR}/install" CACHE PATH "Installation directory" FORCE)
+set(INSTALL_OUTPUT_PATH "${CMAKE_CURRENT_BINARY_DIR}/install" CACHE PATH "Installation directory")
 
 
 # === Options ===
 
 # Main
-option(XSC_BUILD_SHELL "Build XShaderCompiler shell 'xsc'" ON)
+option(XSC_BUILD_SHELL "Build XShaderCompiler shell 'xsc'" OFF)
 option(XSC_BUILD_DEBUGGER "Build XShaderCompiler debugger 'xsc_debugger' (requires wxWidgets library)" OFF)
 option(XSC_BUILD_TESTS "Build all test applications" OFF)
 option(XSC_SHARED_LIB "Build XShaderCompiler as a shared library instead of a static library" OFF)
@@ -150,6 +150,10 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
 endif()
 
+if(MSVC)
+	set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} /MDd")
+endif()
+
 # === Executable ===
 
 # Library core
@@ -266,3 +270,7 @@ install(
 	DESTINATION ${INSTALL_OUTPUT_PATH}
 )
 
+install(
+	DIRECTORY inc/Xsc
+	DESTINATION ${INSTALL_OUTPUT_PATH}/include
+)
