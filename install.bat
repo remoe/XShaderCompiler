@@ -16,6 +16,7 @@ cmake --build . --config RelWithDebInfo
 cmake --build . --config RelWithDebInfo --target install
 
 move "%~dp0install\xsc_core.lib" "%~dp0install\lib\x86\Debug\xsc_core.lib"
+move "%~dp0install\xsc_core.pdb" "%~dp0install\lib\x86\Debug\xsc_core.pdb"
 
 REM Build Release target
 cmake -G "Visual Studio 14 2015" -DINSTALL_OUTPUT_PATH="%~dp0/install" ../
@@ -35,6 +36,7 @@ cmake --build . --config RelWithDebInfo
 cmake --build . --config RelWithDebInfo --target install
 
 move "%~dp0install\xsc_core.lib" "%~dp0install\lib\x64\Debug\xsc_core.lib"
+move "%~dp0install\xsc_core.pdb" "%~dp0install\lib\x64\Debug\xsc_core.pdb"
 
 REM Build Release target
 cmake -G "Visual Studio 14 2015 Win64" -DINSTALL_OUTPUT_PATH="%~dp0/install" ../
