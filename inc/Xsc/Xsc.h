@@ -157,6 +157,10 @@ struct Options
     //! If true, explicit binding slots are enabled. By default false.
     bool    explicitBinding         = false;
 
+    //! If true, generate 'location' layout qualifiers for fragment program outputs. This can also be enabled by setting
+    //! 'explicitBinding' to true.
+    bool    fragmentLocations        = false;
+
     //! If true, code obfuscation is performed. By default false.
     bool    obfuscate               = false;
 

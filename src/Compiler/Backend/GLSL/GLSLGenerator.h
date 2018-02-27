@@ -321,6 +321,7 @@ class GLSLGenerator : public Generator
 
         bool                                    allowExtensions_        = false;
         bool                                    explicitBinding_        = false;
+        bool                                    fragmentLocations_      = false;
         bool                                    preserveComments_       = false;
         bool                                    allowLineMarks_         = false;
         bool                                    compactWrappers_        = false;

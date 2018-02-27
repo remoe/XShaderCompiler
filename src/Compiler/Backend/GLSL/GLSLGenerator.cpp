@@ -62,6 +62,7 @@ void GLSLGenerator::GenerateCodePrimary(
     nameMangling_       = outputDesc.nameMangling;
     allowExtensions_    = outputDesc.options.allowExtensions;
     explicitBinding_    = outputDesc.options.explicitBinding;
+    fragmentLocations_  = outputDesc.options.fragmentLocations;
     preserveComments_   = outputDesc.options.preserveComments;
     separateShaders_    = outputDesc.options.separateShaders;
     separateSamplers_   = outputDesc.options.separateSamplers;
@@ -1866,7 +1867,7 @@ void GLSLGenerator::WriteGlobalOutputSemanticsSlot(TypeSpecifier* typeSpecifier,
                 WriteInterpModifiers(varDeclStmnt->typeSpecifier->interpModifiers, varDecl);
             Separator();
 
-            if (explicitBinding_)
+            if (explicitBinding_ || fragmentLocations_)
             {
                 /* Get slot index: directly for fragment output, and automatically otherwise */
                 int location = -1;
