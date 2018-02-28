@@ -1356,10 +1356,12 @@ bool GLSLGenerator::WriteGlobalLayoutsFragment(const Program::LayoutFragmentShad
     {
         WriteLayoutGlobalIn(
             {
-                [&]()
-                {
-                    Write("origin_upper_left");
-                },
+                // BEGIN BANSHEE CHANGES
+//                [&]()
+//                {
+//                    Write("origin_upper_left");
+//                },
+                // END BANSHEE CHANGES
 
                 [&]()
                 {
