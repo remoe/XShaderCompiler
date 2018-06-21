@@ -1,0 +1,42 @@
+sudo: false
+language: cpp
+
+matrix:
+  include:
+    - os: linux
+      compiler:
+        - gcc
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-7
+      env:
+        - MATRIX_EVAL="CC=gcc-7 && CXX=g++-7"
+    - os: osx
+      compiler:
+        - clang
+      osx_image: xcode9
+  
+before_install:
+    - eval "${MATRIX_EVAL}"
+  
+script:
+ - rm -rf install
+ - mkdir -p install/lib
+ - mkdir Build
+ - cd Build
+ - cmake -G "Unix Makefiles" -DINSTALL_OUTPUT_PATH="$PWD/../install" ../
+ - cmake --build . --config Release
+ - cmake --build . --config Release --target install
+ - cd ..
+ - mv "$PWD/install/libxsc_core.a" "$PWD/install/lib/libxsc_core.a"
+ - rm -rf Build
+  
+after_success:
+  - today=`date +%d.%m.%Y`
+  - buildName=${today}
+  - filename=XShaderCompiler_${buildName}_${TRAVIS_OS_NAME}.tar.gz
+  - find ./install -not -name "*.dbg" -not -name ".dwarf" -not -type d | cut -sd / -f 3- | tar -C ./install -czvf ${filename} -T -
+  - curl -v --ftp-create-dirs -T ${filename} -u ${FTP_USER}:${FTP_PASSWORD} ${FTP_DESTINATION}
