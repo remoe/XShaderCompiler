@@ -391,6 +391,9 @@ struct Uniform
 
     //! Flags further defining the uniform.
     int flags = None;
+
+    //! In case the parameter is used as a destination for sprite animation UVs, identifier of the texture its animating
+    std::string spriteUVRef;
 };
 
 //! Single parameter in a function.

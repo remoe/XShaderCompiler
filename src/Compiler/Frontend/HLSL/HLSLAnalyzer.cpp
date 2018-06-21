@@ -2510,7 +2510,9 @@ void HLSLAnalyzer::AnalyzeExtAttributes(std::vector<AttributePtr>& attribs, cons
             case AttributeType::Internal:
                 AnalyzeAttributeModifier(attrib.get(), typeDen);
             break;
-
+            case AttributeType::SpriteUV:
+                AnalyzeAttributeSpriteUV(attrib.get(), typeDen);
+            break;
             // END BANSHEE CHANGES
 
             default:
@@ -2676,6 +2678,21 @@ void HLSLAnalyzer::AnalyzeAttributeModifier(Attribute* attrib, const TypeDenoter
     }
 }
 
+void HLSLAnalyzer::AnalyzeAttributeSpriteUV(Attribute* attrib, const TypeDenoterPtr& typeDen)
+{
+    if (AnalyzeNumArgsAttribute(attrib, 1, true))
+    {
+        if(auto baseTypeDen = typeDen->As<BaseTypeDenoter>())
+        {
+            auto expr = attrib->arguments[0].get();
+            if (auto objectExpr = expr->As<ObjectExpr>())
+                baseTypeDen->spriteUVRef = objectExpr->ident;
+            else
+                Error(R_ExpectedIdentArgInAttribute("spriteuv"), expr);
+        }
+    }
+}
+
 void HLSLAnalyzer::AnalyzeExtAttributes(std::vector<AttributePtr>& attribs, const std::vector<SamplerDeclPtr>& samplerDecls)
 {
     for (const auto& attrib : attribs)
@@ -2693,7 +2710,7 @@ void HLSLAnalyzer::AnalyzeExtAttributes(std::vector<AttributePtr>& attribs, cons
                             samplerDecl->alias = objectExpr->ident;
                     }
                     else
-                        Error(R_ExpectedIdentArgInAttribute("layout"), expr);
+                        Error(R_ExpectedIdentArgInAttribute("alias"), expr);
                 }
             }
             break;

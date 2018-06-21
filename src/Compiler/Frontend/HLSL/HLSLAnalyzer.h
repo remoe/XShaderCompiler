@@ -219,6 +219,7 @@ class HLSLAnalyzer : public Analyzer
 
         // BEGIN BANSHEE CHANGES
         void AnalyzeAttributeModifier(Attribute* attrib, const TypeDenoterPtr& typeDen);
+        void AnalyzeAttributeSpriteUV(Attribute* attrib, const TypeDenoterPtr& typeDen);
         void AnalyzeExtAttributes(std::vector<AttributePtr>& attribs, const std::vector<SamplerDeclPtr>& samplerDecls);
         // END BANSHEE CHANGES
 

@@ -659,6 +659,7 @@ enum class AttributeType
     Color,
     Internal,
     Alias,
+    SpriteUV,
     // END BANSHEE CHANGES
 
     #endif

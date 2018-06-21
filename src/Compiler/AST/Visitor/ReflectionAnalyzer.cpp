@@ -464,6 +464,8 @@ IMPLEMENT_VISIT_PROC(UniformBufferDecl)
                     if ((baseTypeDenoter->extModifiers & ExtModifiers::Color) != 0)
                         uniform.flags |= Reflection::Uniform::Flags::Color;
 
+                    uniform.spriteUVRef = baseTypeDenoter->spriteUVRef;
+
                     if(decl->defaultValue.available)
                     {
                         Reflection::DefaultValue defaultValue;

@@ -319,6 +319,7 @@ struct BaseTypeDenoter : public TypeDenoter
 
     // BEGIN BANSHEE CHANGES
     int             extModifiers = 0;
+    std::string     spriteUVRef;
     // END BANSHEE CHANGES
     #endif
 };
