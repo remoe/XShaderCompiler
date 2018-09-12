@@ -26,19 +26,22 @@ GLSLExtensionAgent::GLSLExtensionAgent()
     /* Establish intrinsic-to-extension map */
     intrinsicExtMap_ = std::map<Intrinsic, const char*>
     {
-        { Intrinsic::AsDouble,                  E_GL_ARB_gpu_shader_int64   },
-        { Intrinsic::AsFloat,                   E_GL_ARB_gpu_shader5        },
-        { Intrinsic::AsInt,                     E_GL_ARB_gpu_shader5        },
-        { Intrinsic::AsUInt_1,                  E_GL_ARB_gpu_shader5        },
-        { Intrinsic::FirstBitHigh,              E_GL_ARB_gpu_shader_fp64    },
-        { Intrinsic::FirstBitLow,               E_GL_ARB_gpu_shader_fp64    },
-        { Intrinsic::DDXCoarse,                 E_GL_ARB_derivative_control },
-        { Intrinsic::DDXFine,                   E_GL_ARB_derivative_control },
-        { Intrinsic::DDYCoarse,                 E_GL_ARB_derivative_control },
-        { Intrinsic::DDYFine,                   E_GL_ARB_derivative_control },
-        { Intrinsic::Texture_QueryLod,          E_GL_ARB_texture_query_lod  },
-        { Intrinsic::Texture_QueryLodUnclamped, E_GL_ARB_texture_query_lod  },
-        { Intrinsic::LdExp,                     E_GL_ARB_gpu_shader_fp64    },
+        { Intrinsic::AsDouble,                  E_GL_ARB_gpu_shader_int64               },
+        { Intrinsic::AsFloat,                   E_GL_ARB_gpu_shader5                    },
+        { Intrinsic::AsInt,                     E_GL_ARB_gpu_shader5                    },
+        { Intrinsic::AsUInt_1,                  E_GL_ARB_gpu_shader5                    },
+        { Intrinsic::FirstBitHigh,              E_GL_ARB_gpu_shader_fp64                },
+        { Intrinsic::FirstBitLow,               E_GL_ARB_gpu_shader_fp64                },
+        { Intrinsic::DDXCoarse,                 E_GL_ARB_derivative_control             },
+        { Intrinsic::DDXFine,                   E_GL_ARB_derivative_control             },
+        { Intrinsic::DDYCoarse,                 E_GL_ARB_derivative_control             },
+        { Intrinsic::DDYFine,                   E_GL_ARB_derivative_control             },
+        { Intrinsic::Texture_QueryLod,          E_GL_ARB_texture_query_lod              },
+        { Intrinsic::Texture_QueryLodUnclamped, E_GL_ARB_texture_query_lod              },
+        { Intrinsic::LdExp,                     E_GL_ARB_gpu_shader_fp64                },
+        { Intrinsic::F16toF32,                  E_GL_ARB_shading_language_packing       },
+        { Intrinsic::F32toF16,                  E_GL_ARB_shading_language_packing       },
+        { Intrinsic::PackHalf2x16,              E_GL_ARB_shading_language_packing       },
     };
 }
 
