@@ -4,15 +4,6 @@
 cmake_minimum_required(VERSION 2.8)
 project(XShaderCompiler)
 
-
-# === Build path ===
-
-set(BUILD_OUTPUT_PATH "${CMAKE_CURRENT_BINARY_DIR}/build")
-set(EXECUTABLE_OUTPUT_PATH ${BUILD_OUTPUT_PATH} CACHE PATH "Build directory" FORCE)
-set(LIBRARY_OUTPUT_PATH ${BUILD_OUTPUT_PATH} CACHE PATH "Build directory" FORCE)
-set(INSTALL_OUTPUT_PATH "${CMAKE_CURRENT_BINARY_DIR}/install" CACHE PATH "Installation directory")
-
-
 # === Options ===
 
 # Main
@@ -57,7 +48,6 @@ endif()
 if(XSC_ENABLE_SPIRV)
 	add_definitions(-DXSC_ENABLE_SPIRV)
 endif()
-
 
 # === Global files ===
 
