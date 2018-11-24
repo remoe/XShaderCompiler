@@ -25,10 +25,10 @@
 #include <set>
 #include <sstream>
 
-//#ifdef __APPLE__
+#ifdef XSC_ENABLE_MOLTENVK_CONVERTER
 #include "MoltenVKConverter.h"
 #include "ASTPrinter.h"
-//#endif
+#endif
 
 namespace Xsc
 {
@@ -1061,11 +1061,11 @@ IMPLEMENT_VISIT_PROC(InitializerExpr)
 
 void GLSLGenerator::PreProcessAST(const ShaderInput& inputDesc, const ShaderOutput& outputDesc)
 {
-    //#ifdef __APPLE__
+    #ifdef XSC_ENABLE_MOLTENVK_CONVERTER
     if(IsVKSL()) {
         PreProcessMoltenVKConverter();
     }
-    //#endif  
+    #endif  
     PreProcessStructParameterAnalyzer(inputDesc);
     PreProcessTypeConverter();
     PreProcessExprConverterPrimary();
@@ -1147,13 +1147,13 @@ void GLSLGenerator::PreProcessExprConverterSecondary()
     converter.Convert(*GetProgram(), ExprConverter::ConvertMatrixSubscripts, nameMangling_);
 }
 
-//#ifdef __APPLE__
+#ifdef XSC_ENABLE_MOLTENVK_CONVERTER
 void GLSLGenerator::PreProcessMoltenVKConverter()
 {
     MoltenVKConverter converter;
     converter.Convert(*GetProgram());
 }
-//#endif
+#endif
 
 /* ----- Basics ----- */
 

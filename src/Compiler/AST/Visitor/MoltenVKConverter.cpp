@@ -48,17 +48,8 @@ namespace Xsc
     {
         if(auto bufferDeclStmnt = bufferDecl.declStmntRef)
         {
-            BufferTypeDenoterPtr newBufferTypeDen = nullptr;
-            switch(bufferDeclStmnt->typeDenoter->bufferType) {
-            case BufferType::RWBuffer: 
-                newBufferTypeDen = std::make_shared<BufferTypeDenoter>(BufferType::RWStructuredBuffer); 
-                break;
-            case BufferType::Buffer:
-                newBufferTypeDen = std::make_shared<BufferTypeDenoter>(BufferType::StructuredBuffer);
-                break;
-            }
-
-            if(newBufferTypeDen != nullptr) {
+            if(bufferDeclStmnt->typeDenoter->bufferType == BufferType::RWBuffer) {
+                BufferTypeDenoterPtr newBufferTypeDen = std::make_shared<BufferTypeDenoter>(BufferType::RWStructuredBuffer);
                 newBufferTypeDen->genericTypeDenoter = bufferDeclStmnt->typeDenoter->GetGenericTypeDenoter();
                 newBufferTypeDen->genericSize = bufferDeclStmnt->typeDenoter->genericSize;
                 bufferDeclStmnt->typeDenoter = newBufferTypeDen;

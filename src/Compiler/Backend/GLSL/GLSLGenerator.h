@@ -153,9 +153,9 @@ class GLSLGenerator : public Generator
         void PreProcessFuncNameConverter();
         void PreProcessReferenceAnalyzer(const ShaderInput& inputDesc);
         void PreProcessExprConverterSecondary();
-        //#ifdef __APPLE__
+        #ifdef XSC_ENABLE_MOLTENVK_CONVERTER
         void PreProcessMoltenVKConverter();
-        //#endif
+        #endif
 
         /* ----- Basics ----- */
 

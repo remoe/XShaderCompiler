@@ -4,15 +4,6 @@
 cmake_minimum_required(VERSION 2.8)
 project(XShaderCompiler)
 
-
-# === Build path ===
-
-set(BUILD_OUTPUT_PATH "${CMAKE_CURRENT_BINARY_DIR}/build")
-set(EXECUTABLE_OUTPUT_PATH ${BUILD_OUTPUT_PATH} CACHE PATH "Build directory" FORCE)
-set(LIBRARY_OUTPUT_PATH ${BUILD_OUTPUT_PATH} CACHE PATH "Build directory" FORCE)
-set(INSTALL_OUTPUT_PATH "${CMAKE_CURRENT_BINARY_DIR}/install" CACHE PATH "Installation directory")
-
-
 # === Options ===
 
 # Main
@@ -30,8 +21,18 @@ option(XSC_ENABLE_EASTER_EGGS "Enables little easter eggs" OFF)
 option(XSC_ENABLE_POST_VALIDATION "Enables the post validation in presettings with 'glslangValidator'" OFF)
 option(XSC_ENABLE_LANGUAGE_EXT "Enables a few language extensions (e.g. 'space' attribute for stronger type system)" ON)
 option(XSC_ENABLE_SPIRV "Enables all SPIR-V related features (experimental; requires submodule in 'external/SPIR-V')" OFF)
-
+option(XSC_ENABLE_MOLTENVK_CONVERTER "Enables shader converter for MacOS MoltenVK)" OFF)
+option(XSC_ENABLE_DEFAULT_FOLDER_BUILD "Use default folders like bin,lib for build" OFF)
 #set(XSC_REPORT_LANGUAGE "EN" CACHE STRING "Language of the report output (supported values: 'EN')")
+
+
+# === Build path ===
+if(!XSC_ENABLE_DEFAULT_FOLDER_BUILD)
+	set(BUILD_OUTPUT_PATH "${CMAKE_CURRENT_BINARY_DIR}/build")
+	set(EXECUTABLE_OUTPUT_PATH ${BUILD_OUTPUT_PATH} CACHE PATH "Build directory" FORCE)
+	set(LIBRARY_OUTPUT_PATH ${BUILD_OUTPUT_PATH} CACHE PATH "Build directory" FORCE)
+	set(INSTALL_OUTPUT_PATH "${CMAKE_CURRENT_BINARY_DIR}/install" CACHE PATH "Installation directory")
+endif()
 
 
 # === Preprocessor definitions ===
@@ -58,6 +59,9 @@ if(XSC_ENABLE_SPIRV)
 	add_definitions(-DXSC_ENABLE_SPIRV)
 endif()
 
+if(XSC_ENABLE_MOLTENVK_CONVERTER)
+	add_definitions(-DXSC_ENABLE_MOLTENVK_CONVERTER)
+endif()
 
 # === Global files ===
 
@@ -265,26 +269,38 @@ endif()
 
 # === Installation Rules ===
 
-install(
-	TARGETS ${XSC_INSTALL_TARGETS}
-	DESTINATION ${INSTALL_OUTPUT_PATH}
-)
-
-install(
-	DIRECTORY inc/Xsc
-	DESTINATION ${INSTALL_OUTPUT_PATH}/include
-)
-
-IF(MSVC)
+if(XSC_ENABLE_DEFAULT_FOLDER_BUILD)
 	install(
-		FILES ${CMAKE_BINARY_DIR}/xsc_core.dir/RelWithDebInfo/xsc_core.pdb 
-		DESTINATION ${INSTALL_OUTPUT_PATH} 
-		CONFIGURATIONS RelWithDebInfo
+		TARGETS ${XSC_INSTALL_TARGETS}
+		RUNTIME DESTINATION bin
+		LIBRARY DESTINATION lib
+		ARCHIVE DESTINATION lib
 	)
-
 	install(
-		FILES ${CMAKE_BINARY_DIR}/xsc_core.dir/Debug/xsc_core.pdb 
-		DESTINATION ${INSTALL_OUTPUT_PATH} 
-		CONFIGURATIONS Debug
-	)	
-ENDIF(MSVC)
+		DIRECTORY inc/Xsc
+		DESTINATION include
+	)
+else()
+	install(
+		TARGETS ${XSC_INSTALL_TARGETS}
+		DESTINATION ${INSTALL_OUTPUT_PATH}
+	)
+	install(
+		DIRECTORY inc/Xsc
+		DESTINATION ${INSTALL_OUTPUT_PATH}/include
+	)
+	IF(MSVC)
+		install(
+			FILES ${CMAKE_BINARY_DIR}/xsc_core.dir/RelWithDebInfo/xsc_core.pdb 
+			DESTINATION ${INSTALL_OUTPUT_PATH} 
+			CONFIGURATIONS RelWithDebInfo
+		)
+
+		install(
+			FILES ${CMAKE_BINARY_DIR}/xsc_core.dir/Debug/xsc_core.pdb 
+			DESTINATION ${INSTALL_OUTPUT_PATH} 
+			CONFIGURATIONS Debug
+		)	
+	ENDIF(MSVC)		
+endif()
+
